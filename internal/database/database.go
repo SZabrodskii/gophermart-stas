@@ -7,13 +7,17 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 
 	_ "github.com/lib/pq"
+	"go.uber.org/zap"
 )
 
 type DB struct {
-	conn *sql.DB
+	conn   *sql.DB
+	logger *zap.Logger
 }
 
-func New(cfg *config.Config) (*DB, error) {
+func New(cfg *config.Config, logger *zap.Logger) (*DB, error) {
+	logger.Info("Connecting to database", zap.String("uri", maskPassword(cfg.DatabaseURI)))
+
 	conn, err := sql.Open("postgres", cfg.DatabaseURI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -23,16 +27,26 @@ func New(cfg *config.Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	db := &DB{conn: conn}
+	db := &DB{
+		conn:   conn,
+		logger: logger,
+	}
 
 	if err := db.migrate(); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	logger.Info("Database migration completed successfully")
 	return db, nil
 }
 
+func maskPassword(uri string) string {
+	return "***masked***"
+}
+
 func (db *DB) migrate() error {
+	db.logger.Info("Starting database migration")
+
 	queries := []string{
 		`CREATE TABLE IF NOT EXISTS users (
 			id SERIAL PRIMARY KEY,
@@ -63,16 +77,22 @@ func (db *DB) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id)`,
 	}
 
-	for _, query := range queries {
+	for i, query := range queries {
+		db.logger.Debug("Executing migration query", zap.Int("step", i+1))
 		if _, err := db.conn.Exec(query); err != nil {
-			return fmt.Errorf("failed to execute query %s: %w", query, err)
+			db.logger.Error("Migration failed",
+				zap.Int("step", i+1),
+				zap.Error(err))
+			return fmt.Errorf("failed to execute query %d: %w", i+1, err)
 		}
 	}
 
+	db.logger.Info("Database migration completed", zap.Int("queries", len(queries)))
 	return nil
 }
 
 func (db *DB) Close() error {
+	db.logger.Info("Closing database connection")
 	return db.conn.Close()
 }
 
