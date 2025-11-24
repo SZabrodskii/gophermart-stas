@@ -1,27 +1,27 @@
 package logger
 
 import (
-	"log/slog"
-	"os"
+	"context"
 
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
-type Logger struct {
-	*slog.Logger
-}
+var Module = fx.Provide(NewLogger)
 
-func New() *Logger {
-	opts := &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+func NewLogger(lc fx.Lifecycle) (*zap.Logger, error) {
+	cfg := zap.NewProductionConfig()
+	cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+
+	l, err := cfg.Build()
+	if err != nil {
+		return nil, err
 	}
-
-	handler := slog.NewJSONHandler(os.Stdout, opts)
-	logger := slog.New(handler)
-
-	return &Logger{Logger: logger}
+	lc.Append(fx.Hook{
+		OnStop: func(context.Context) error {
+			_ = l.Sync()
+			return nil
+		},
+	})
+	return l, nil
 }
-
-var Module = fx.Options(
-	fx.Provide(New),
-)
