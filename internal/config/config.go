@@ -1,8 +1,8 @@
 package config
 
 import (
+	"errors"
 	"flag"
-	"log"
 	"os"
 )
 
@@ -12,7 +12,7 @@ type Config struct {
 	AccrualAddress string
 }
 
-func New() *Config {
+func New() (*Config, error) {
 	var (
 		runAddress     = flag.String("a", getEnv("RUN_ADDRESS", ":8080"), "server address")
 		databaseURI    = flag.String("d", getEnv("DATABASE_URI", ""), "database connection string")
@@ -21,18 +21,18 @@ func New() *Config {
 	flag.Parse()
 
 	if *databaseURI == "" {
-		log.Fatal("DATABASE_URI is required")
+		return nil, errors.New("DATABASE_URI is required")
 	}
 
 	if *accrualAddress == "" {
-		log.Fatal("ACCRUAL_SYSTEM_ADDRESS is required")
+		return nil, errors.New("ACCRUAL_SYSTEM_ADDRESS is required")
 	}
 
 	return &Config{
 		RunAddress:     *runAddress,
 		DatabaseURI:    *databaseURI,
 		AccrualAddress: *accrualAddress,
-	}
+	}, nil
 }
 
 func getEnv(key, defaultValue string) string {
