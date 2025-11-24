@@ -1,4 +1,4 @@
-module github.com/your-username/gophermart
+module github.com/SZabrodskii/gophermart-stas
 
 go 1.25.2
 

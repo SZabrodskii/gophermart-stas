@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/your-username/gophermart/internal/config"
+	"github.com/SZabrodskii/gophermart-stas/internal/config"
 
 	_ "github.com/lib/pq"
 )

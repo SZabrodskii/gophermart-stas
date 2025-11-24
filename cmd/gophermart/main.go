@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/your-username/gophermart/internal/config"
-	"github.com/your-username/gophermart/internal/database"
+	"github.com/SZabrodskii/gophermart-stas/internal/config"
+	"github.com/SZabrodskii/gophermart-stas/internal/database"
 
 	"go.uber.org/fx"
 )
