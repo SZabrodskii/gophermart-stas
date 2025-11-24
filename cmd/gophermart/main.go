@@ -6,12 +6,15 @@ import (
 
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/SZabrodskii/gophermart-stas/internal/database"
+	"github.com/SZabrodskii/gophermart-stas/pkg/logger"
 
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 func main() {
 	app := fx.New(
+		logger.Module,
 		fx.Provide(
 			config.New,
 			database.New,
@@ -29,8 +32,9 @@ func main() {
 	<-app.Done()
 }
 
-func StartServer(cfg *config.Config, db *database.DB) {
-	log.Printf("Server starting on %s", cfg.RunAddress)
-	log.Printf("Database connection established")
-	log.Printf("Accrual system address: %s", cfg.AccrualAddress)
+func StartServer(cfg *config.Config, db *database.DB, logger *zap.Logger) {
+	logger.Info("Server starting",
+		zap.String("address", cfg.RunAddress),
+		zap.String("accrual_address", cfg.AccrualAddress))
+	logger.Info("Database connection established")
 }
