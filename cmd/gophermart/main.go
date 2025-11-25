@@ -6,6 +6,8 @@ import (
 
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/SZabrodskii/gophermart-stas/internal/database"
+	"github.com/SZabrodskii/gophermart-stas/internal/handlers"
+	"github.com/SZabrodskii/gophermart-stas/internal/server"
 	"github.com/SZabrodskii/gophermart-stas/pkg/logger"
 
 	"go.uber.org/fx"
@@ -15,9 +17,11 @@ import (
 func main() {
 	app := fx.New(
 		logger.Module,
+		server.Module,
 		fx.Provide(
 			config.New,
 			database.New,
+			handlers.New,
 		),
 		fx.Invoke(StartServer),
 	)
@@ -32,9 +36,10 @@ func main() {
 	<-app.Done()
 }
 
-func StartServer(cfg *config.Config, db *database.DB, logger *zap.Logger) {
-	logger.Info("Server starting",
-		zap.String("address", cfg.RunAddress),
-		zap.String("accrual_address", cfg.AccrualAddress))
-	logger.Info("Database connection established")
+func StartServer(srv *server.Server, logger *zap.Logger) {
+	go func() {
+		if err := srv.Start(); err != nil {
+			logger.Fatal("HTTP server failed", zap.Error(err))
+		}
+	}()
 }
