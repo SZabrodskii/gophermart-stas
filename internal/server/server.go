@@ -9,7 +9,7 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/handlers"
 	"github.com/SZabrodskii/gophermart-stas/internal/middleware"
 
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -18,11 +18,13 @@ type Server struct {
 	config  *config.Config
 	db      *database.DB
 	logger  *zap.Logger
-	router  *mux.Router
+	router  *gin.Engine
 	handler *handlers.Handler
 }
 
 func New(cfg *config.Config, db *database.DB, logger *zap.Logger, handler *handlers.Handler) *Server {
+	gin.SetMode(gin.ReleaseMode)
+	
 	return &Server{
 		config:  cfg,
 		db:      db,
@@ -32,26 +34,28 @@ func New(cfg *config.Config, db *database.DB, logger *zap.Logger, handler *handl
 }
 
 func (s *Server) setupRoutes() {
-	s.router = mux.NewRouter()
+	s.router = gin.New()
 
-	s.router.Use(middleware.ZapRequestLogger(s.logger))
-	s.router.Use(middleware.CompressAccepted)
-	s.router.Use(middleware.Decompress)
+	s.router.Use(middleware.GinZapLogger(s.logger))
+	s.router.Use(middleware.GinGzipMiddleware())
+	s.router.Use(gin.Recovery())
 
-	api := s.router.PathPrefix("/api").Subrouter()
+	api := s.router.Group("/api")
+	
+	userGroup := api.Group("/user")
+	{
+		userGroup.POST("/register", s.handler.Register)
+		userGroup.POST("/login", s.handler.Login)
 
-	userRoutes := api.PathPrefix("/user").Subrouter()
-	userRoutes.HandleFunc("/register", s.handler.Register).Methods("POST")
-	userRoutes.HandleFunc("/login", s.handler.Login).Methods("POST")
-
-	authRoutes := userRoutes.NewRoute().Subrouter()
-	authRoutes.Use(middleware.JWTAuth(s.logger))
-
-	authRoutes.HandleFunc("/orders", s.handler.UploadOrder).Methods("POST")
-	authRoutes.HandleFunc("/orders", s.handler.GetOrders).Methods("GET")
-	authRoutes.HandleFunc("/balance", s.handler.GetBalance).Methods("GET")
-	authRoutes.HandleFunc("/balance/withdraw", s.handler.WithdrawBalance).Methods("POST")
-	authRoutes.HandleFunc("/withdrawals", s.handler.GetWithdrawals).Methods("GET")
+		authGroup := userGroup.Use(middleware.GinJWTAuth(s.logger))
+		{
+			authGroup.POST("/orders", s.handler.UploadOrder)
+			authGroup.GET("/orders", s.handler.GetOrders)
+			authGroup.GET("/balance", s.handler.GetBalance)
+			authGroup.POST("/balance/withdraw", s.handler.WithdrawBalance)
+			authGroup.GET("/withdrawals", s.handler.GetWithdrawals)
+		}
+	}
 }
 
 func (s *Server) Start() error {
