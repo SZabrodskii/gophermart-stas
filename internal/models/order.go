@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 const (
 	OrderStatusNew        = "NEW"
@@ -10,11 +14,15 @@ const (
 )
 
 type Order struct {
-	Number     string    `json:"number" db:"number"`
-	UserID     int       `json:"-" db:"user_id"`
-	Status     string    `json:"status" db:"status"`
-	Accrual    *float64  `json:"accrual,omitempty" db:"accrual"`
-	UploadedAt time.Time `json:"uploaded_at" db:"uploaded_at"`
+	Number     string         `json:"number" gorm:"primaryKey"`
+	UserID     uint           `json:"-" gorm:"not null;index"`
+	User       User           `json:"-" gorm:"foreignKey:UserID"`
+	Status     string         `json:"status" gorm:"default:NEW"`
+	Accrual    *float64       `json:"accrual,omitempty"`
+	UploadedAt time.Time      `json:"uploaded_at"`
+	CreatedAt  time.Time      `json:"-"`
+	UpdatedAt  time.Time      `json:"-"`
+	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type AccrualResponse struct {
