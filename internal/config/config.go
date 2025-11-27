@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"flag"
 	"os"
 )
@@ -13,31 +12,23 @@ type Config struct {
 }
 
 func New() (*Config, error) {
-	var (
-		runAddress     = flag.String("a", getEnv("RUN_ADDRESS", ":8080"), "server address")
-		databaseURI    = flag.String("d", getEnv("DATABASE_URI", ""), "database connection string")
-		accrualAddress = flag.String("r", getEnv("ACCRUAL_SYSTEM_ADDRESS", ""), "accrual system address")
-	)
+	cfg := &Config{}
+
+	flag.StringVar(&cfg.RunAddress, "a", ":8080", "server address")
+	flag.StringVar(&cfg.DatabaseURI, "d", "postgres:///postgres?host=/var/run/postgresql&sslmode=disable", "database connection string")
+	flag.StringVar(&cfg.AccrualAddress, "r", "http://localhost:8081", "accrual system address")
+
 	flag.Parse()
 
-	if *databaseURI == "" {
-		return nil, errors.New("DATABASE_URI is required")
+	if v, ok := os.LookupEnv("RUN_ADDRESS"); ok {
+		cfg.RunAddress = v
+	}
+	if v, ok := os.LookupEnv("DATABASE_URI"); ok {
+		cfg.DatabaseURI = v
+	}
+	if v, ok := os.LookupEnv("ACCRUAL_SYSTEM_ADDRESS"); ok {
+		cfg.AccrualAddress = v
 	}
 
-	if *accrualAddress == "" {
-		return nil, errors.New("ACCRUAL_SYSTEM_ADDRESS is required")
-	}
-
-	return &Config{
-		RunAddress:     *runAddress,
-		DatabaseURI:    *databaseURI,
-		AccrualAddress: *accrualAddress,
-	}, nil
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
+	return cfg, nil
 }

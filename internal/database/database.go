@@ -1,11 +1,14 @@
 package database
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -16,7 +19,7 @@ type DB struct {
 	logger *zap.Logger
 }
 
-func New(cfg *config.Config, logger *zap.Logger) (*DB, error) {
+func New(lc fx.Lifecycle, cfg *config.Config, logger *zap.Logger) (*DB, error) {
 	logger.Info("Connecting to database", zap.String("uri", maskPassword(cfg.DatabaseURI)))
 
 	conn, err := gorm.Open(postgres.Open(cfg.DatabaseURI), &gorm.Config{})
@@ -29,20 +32,36 @@ func New(cfg *config.Config, logger *zap.Logger) (*DB, error) {
 		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
 
-	if err := sqlDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(time.Minute * 30)
 
 	db := &DB{
 		conn:   conn,
 		logger: logger,
 	}
 
-	if err := db.migrate(); err != nil {
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
-	}
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			if err := sqlDB.PingContext(ctx); err != nil {
+				return fmt.Errorf("failed to ping database: %w", err)
+			}
 
-	logger.Info("Database migration completed successfully")
+			if err := db.migrate(); err != nil {
+				return fmt.Errorf("failed to migrate database: %w", err)
+			}
+
+			logger.Info("Database connected and migrated successfully")
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			logger.Info("Closing database connection")
+			return sqlDB.Close()
+		},
+	})
+
 	return db, nil
 }
 
@@ -66,15 +85,6 @@ func (db *DB) migrate() error {
 
 	db.logger.Info("GORM AutoMigrate completed successfully")
 	return nil
-}
-
-func (db *DB) Close() error {
-	db.logger.Info("Closing database connection")
-	sqlDB, err := db.conn.DB()
-	if err != nil {
-		return err
-	}
-	return sqlDB.Close()
 }
 
 func (db *DB) GetDB() *gorm.DB {
