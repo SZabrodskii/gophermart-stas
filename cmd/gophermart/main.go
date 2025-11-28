@@ -8,6 +8,7 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/database"
 	"github.com/SZabrodskii/gophermart-stas/internal/handlers"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
+	"github.com/SZabrodskii/gophermart-stas/internal/services"
 	"github.com/SZabrodskii/gophermart-stas/pkg/logger"
 
 	"go.uber.org/fx"
@@ -18,6 +19,7 @@ func main() {
 	app := fx.New(
 		logger.Module,
 		server.Module,
+		services.Module,
 		fx.Provide(
 			config.New,
 			database.New,

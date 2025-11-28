@@ -13,6 +13,11 @@ import (
 	"gorm.io/gorm"
 )
 
+var (
+	ErrUserExists         = errors.New("user already exists")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+)
+
 type UserService struct {
 	db     *database.DB
 	logger *zap.Logger
@@ -24,11 +29,6 @@ func NewUserService(db *database.DB, logger *zap.Logger) *UserService {
 		logger: logger,
 	}
 }
-
-var (
-	ErrUserExists         = errors.New("user already exists")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-)
 
 func (s *UserService) Register(login, password string) (string, error) {
 	var existingUser models.User

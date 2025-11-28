@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 
-	"github.com/SZabrodskii/gophermart-stas/internal/database"
+	"github.com/SZabrodskii/gophermart-stas/internal/domain"
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
 
@@ -13,16 +15,23 @@ import (
 )
 
 type Handler struct {
-	db          *database.DB
-	logger      *zap.Logger
-	userService *services.UserService
+	logger         *zap.Logger
+	userService    domain.UserServiceI
+	orderService   domain.OrderServiceI
+	balanceService domain.BalanceServiceI
 }
 
-func New(db *database.DB, logger *zap.Logger) *Handler {
+func New(
+	logger *zap.Logger,
+	userService domain.UserServiceI,
+	orderService domain.OrderServiceI,
+	balanceService domain.BalanceServiceI,
+) *Handler {
 	return &Handler{
-		db:          db,
-		logger:      logger,
-		userService: services.NewUserService(db, logger),
+		logger:         logger,
+		userService:    userService,
+		orderService:   orderService,
+		balanceService: balanceService,
 	}
 }
 
@@ -84,14 +93,88 @@ func (h *Handler) Login(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+func (h *Handler) getUserIDFromContext(c *gin.Context) (uint, error) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		return 0, errors.New("user not authenticated")
+	}
+
+	id, ok := userID.(uint)
+	if !ok {
+		return 0, errors.New("invalid user ID format")
+	}
+
+	return id, nil
+}
+
 func (h *Handler) UploadOrder(c *gin.Context) {
-	h.logger.Info("Upload order endpoint called")
-	c.JSON(http.StatusNotImplemented, gin.H{"message": "Upload order endpoint - not implemented yet"})
+	userID, err := h.getUserIDFromContext(c)
+	if err != nil {
+		h.logger.Warn("Failed to get user ID", zap.Error(err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Warn("Failed to read request body", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	orderNumber := strings.TrimSpace(string(body))
+	if orderNumber == "" {
+		h.logger.Warn("Empty order number")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Order number is required"})
+		return
+	}
+
+	err = h.orderService.UploadOrder(userID, orderNumber)
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidOrderNumber) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Invalid order number"})
+			return
+		}
+		if errors.Is(err, services.ErrOrderExists) {
+			c.Status(http.StatusOK)
+			return
+		}
+		if errors.Is(err, services.ErrOrderExistsOtherUser) {
+			c.JSON(http.StatusConflict, gin.H{"error": "Order already exists for another user"})
+			return
+		}
+
+		h.logger.Error("Failed to upload order", zap.Error(err), zap.Uint("userID", userID), zap.String("orderNumber", orderNumber))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+
+	h.logger.Info("Order uploaded successfully", zap.Uint("userID", userID), zap.String("orderNumber", orderNumber))
+	c.Status(http.StatusAccepted)
 }
 
 func (h *Handler) GetOrders(c *gin.Context) {
-	h.logger.Info("Get orders endpoint called")
-	c.JSON(http.StatusNotImplemented, gin.H{"message": "Get orders endpoint - not implemented yet"})
+	userID, err := h.getUserIDFromContext(c)
+	if err != nil {
+		h.logger.Warn("Failed to get user ID", zap.Error(err))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	orders, err := h.orderService.GetUserOrders(userID)
+	if err != nil {
+		h.logger.Error("Failed to get user orders", zap.Error(err), zap.Uint("userID", userID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+
+	if len(orders) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	h.logger.Info("Orders retrieved successfully", zap.Uint("userID", userID), zap.Int("count", len(orders)))
+	c.JSON(http.StatusOK, orders)
 }
 
 func (h *Handler) GetBalance(c *gin.Context) {
