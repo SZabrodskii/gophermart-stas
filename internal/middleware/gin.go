@@ -7,18 +7,18 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/auth"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
+	"github.com/gopybara/httpbara"
 )
 
-func GinZapLogger(logger *zap.Logger) gin.HandlerFunc {
+func GinZapLogger(logger httpbara.Logger) gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(params gin.LogFormatterParams) string {
 		logger.Info("http request",
-			zap.String("method", params.Method),
-			zap.String("path", params.Path),
-			zap.Int("status", params.StatusCode),
-			zap.Duration("latency", params.Latency),
-			zap.String("client_ip", params.ClientIP),
-			zap.String("user_agent", params.Request.UserAgent()),
+			"method", params.Method,
+			"path", params.Path,
+			"status", params.StatusCode,
+			"latency", params.Latency,
+			"client_ip", params.ClientIP,
+			"user_agent", params.Request.UserAgent(),
 		)
 		return ""
 	})
@@ -30,7 +30,7 @@ func GinGzipMiddleware() gin.HandlerFunc {
 	}
 }
 
-func GinJWTAuth(logger *zap.Logger) gin.HandlerFunc {
+func GinJWTAuth(logger httpbara.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -48,7 +48,7 @@ func GinJWTAuth(logger *zap.Logger) gin.HandlerFunc {
 
 		claims, err := auth.ParseJWT(tokenString)
 		if err != nil {
-			logger.Warn("Invalid JWT token", zap.Error(err))
+			logger.Warn("Invalid JWT token", "error", err)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}

@@ -9,7 +9,7 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/utils"
 
-	"go.uber.org/zap"
+	"github.com/gopybara/httpbara"
 	"gorm.io/gorm"
 )
 
@@ -20,10 +20,10 @@ var (
 
 type UserService struct {
 	db     *database.DB
-	logger *zap.Logger
+	logger httpbara.Logger
 }
 
-func NewUserService(db *database.DB, logger *zap.Logger) *UserService {
+func NewUserService(db *database.DB, logger httpbara.Logger) *UserService {
 	return &UserService{
 		db:     db,
 		logger: logger,
@@ -37,13 +37,13 @@ func (s *UserService) Register(login, password string) (string, error) {
 		return "", ErrUserExists
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		s.logger.Error("Database error during user check", zap.Error(err))
+		s.logger.Error("Database error during user check", "error", err)
 		return "", fmt.Errorf("database error: %w", err)
 	}
 
 	hashedPassword, err := utils.HashPassword(password)
 	if err != nil {
-		s.logger.Error("Failed to hash password", zap.Error(err))
+		s.logger.Error("Failed to hash password", "error", err)
 		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
 
@@ -53,7 +53,7 @@ func (s *UserService) Register(login, password string) (string, error) {
 	}
 
 	if err := s.db.GetDB().Create(&user).Error; err != nil {
-		s.logger.Error("Failed to create user", zap.Error(err))
+		s.logger.Error("Failed to create user", "error", err)
 		return "", fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -64,16 +64,16 @@ func (s *UserService) Register(login, password string) (string, error) {
 	}
 
 	if err := s.db.GetDB().Create(&balance).Error; err != nil {
-		s.logger.Error("Failed to create user balance", zap.Error(err))
+		s.logger.Error("Failed to create user balance", "error", err)
 	}
 
 	token, err := auth.GenerateJWT(user.ID, user.Login)
 	if err != nil {
-		s.logger.Error("Failed to generate JWT", zap.Error(err))
+		s.logger.Error("Failed to generate JWT", "error", err)
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	s.logger.Info("User registered successfully", zap.String("login", login))
+	s.logger.Info("User registered successfully", "login", login)
 	return token, nil
 }
 
@@ -84,7 +84,7 @@ func (s *UserService) Login(login, password string) (string, error) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", ErrInvalidCredentials
 		}
-		s.logger.Error("Database error during login", zap.Error(err))
+		s.logger.Error("Database error during login", "error", err)
 		return "", fmt.Errorf("database error: %w", err)
 	}
 
@@ -94,10 +94,10 @@ func (s *UserService) Login(login, password string) (string, error) {
 
 	token, err := auth.GenerateJWT(user.ID, user.Login)
 	if err != nil {
-		s.logger.Error("Failed to generate JWT", zap.Error(err))
+		s.logger.Error("Failed to generate JWT", "error", err)
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	s.logger.Info("User logged in successfully", zap.String("login", login))
+	s.logger.Info("User logged in successfully", "login", login)
 	return token, nil
 }

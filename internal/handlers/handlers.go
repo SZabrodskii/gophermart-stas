@@ -11,18 +11,18 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
+	"github.com/gopybara/httpbara"
 )
 
 type Handler struct {
-	logger         *zap.Logger
+	logger         httpbara.Logger
 	userService    domain.UserServiceI
 	orderService   domain.OrderServiceI
 	balanceService domain.BalanceServiceI
 }
 
 func New(
-	logger *zap.Logger,
+	logger httpbara.Logger,
 	userService domain.UserServiceI,
 	orderService domain.OrderServiceI,
 	balanceService domain.BalanceServiceI,
@@ -38,7 +38,7 @@ func New(
 func (h *Handler) Register(c *gin.Context) {
 	var req models.UserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warn("Invalid request format", zap.Error(err))
+		h.logger.Warn("Invalid request format", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
@@ -55,7 +55,7 @@ func (h *Handler) Register(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
 			return
 		}
-		h.logger.Error("Registration failed", zap.Error(err))
+		h.logger.Error("Registration failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
@@ -67,7 +67,7 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) Login(c *gin.Context) {
 	var req models.UserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warn("Invalid request format", zap.Error(err))
+		h.logger.Warn("Invalid request format", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
@@ -84,7 +84,7 @@ func (h *Handler) Login(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 			return
 		}
-		h.logger.Error("Login failed", zap.Error(err))
+		h.logger.Error("Login failed", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
@@ -110,14 +110,14 @@ func (h *Handler) getUserIDFromContext(c *gin.Context) (uint, error) {
 func (h *Handler) UploadOrder(c *gin.Context) {
 	userID, err := h.getUserIDFromContext(c)
 	if err != nil {
-		h.logger.Warn("Failed to get user ID", zap.Error(err))
+		h.logger.Warn("Failed to get user ID", "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Warn("Failed to read request body", zap.Error(err))
+		h.logger.Warn("Failed to read request body", "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
@@ -144,26 +144,26 @@ func (h *Handler) UploadOrder(c *gin.Context) {
 			return
 		}
 
-		h.logger.Error("Failed to upload order", zap.Error(err), zap.Uint("userID", userID), zap.String("orderNumber", orderNumber))
+		h.logger.Error("Failed to upload order", "error", err, "userID", userID, "orderNumber", orderNumber)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
 
-	h.logger.Info("Order uploaded successfully", zap.Uint("userID", userID), zap.String("orderNumber", orderNumber))
+	h.logger.Info("Order uploaded successfully", "userID", userID, "orderNumber", orderNumber)
 	c.Status(http.StatusAccepted)
 }
 
 func (h *Handler) GetOrders(c *gin.Context) {
 	userID, err := h.getUserIDFromContext(c)
 	if err != nil {
-		h.logger.Warn("Failed to get user ID", zap.Error(err))
+		h.logger.Warn("Failed to get user ID", "error", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
 	}
 
 	orders, err := h.orderService.GetUserOrders(userID)
 	if err != nil {
-		h.logger.Error("Failed to get user orders", zap.Error(err), zap.Uint("userID", userID))
+		h.logger.Error("Failed to get user orders", "error", err, "userID", userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		return
 	}
@@ -173,7 +173,7 @@ func (h *Handler) GetOrders(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("Orders retrieved successfully", zap.Uint("userID", userID), zap.Int("count", len(orders)))
+	h.logger.Info("Orders retrieved successfully", "userID", userID, "count", len(orders))
 	c.JSON(http.StatusOK, orders)
 }
 

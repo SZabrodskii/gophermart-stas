@@ -8,19 +8,19 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 
+	"github.com/gopybara/httpbara"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 type DB struct {
 	conn   *gorm.DB
-	logger *zap.Logger
+	logger httpbara.Logger
 }
 
-func New(lc fx.Lifecycle, cfg *config.Config, logger *zap.Logger) (*DB, error) {
-	logger.Info("Connecting to database", zap.String("uri", maskPassword(cfg.DatabaseURI)))
+func New(lc fx.Lifecycle, cfg *config.Config, logger httpbara.Logger) (*DB, error) {
+	logger.Info("Connecting to database", "uri", maskPassword(cfg.DatabaseURI))
 
 	conn, err := gorm.Open(postgres.Open(cfg.DatabaseURI), &gorm.Config{})
 	if err != nil {
@@ -79,7 +79,7 @@ func (db *DB) migrate() error {
 		&models.Withdrawal{},
 	)
 	if err != nil {
-		db.logger.Error("Migration failed", zap.Error(err))
+		db.logger.Error("Migration failed", "error", err)
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 

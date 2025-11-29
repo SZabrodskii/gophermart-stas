@@ -9,7 +9,7 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/utils"
 
-	"go.uber.org/zap"
+	"github.com/gopybara/httpbara"
 	"gorm.io/gorm"
 )
 
@@ -19,10 +19,10 @@ var (
 
 type BalanceService struct {
 	db     *database.DB
-	logger *zap.Logger
+	logger httpbara.Logger
 }
 
-func NewBalanceService(db *database.DB, logger *zap.Logger) *BalanceService {
+func NewBalanceService(db *database.DB, logger httpbara.Logger) *BalanceService {
 	return &BalanceService{
 		db:     db,
 		logger: logger,
@@ -40,11 +40,11 @@ func (s *BalanceService) GetBalance(userID uint) (*models.Balance, error) {
 				Withdrawn: 0,
 			}
 			if createErr := s.db.GetDB().Create(&balance).Error; createErr != nil {
-				s.logger.Error("Failed to create balance", zap.Error(createErr))
+				s.logger.Error("Failed to create balance", "error", createErr)
 				return nil, fmt.Errorf("failed to create balance: %w", createErr)
 			}
 		} else {
-			s.logger.Error("Failed to get balance", zap.Error(err), zap.Uint("userID", userID))
+			s.logger.Error("Failed to get balance", "error", err, "userID", userID)
 			return nil, fmt.Errorf("failed to get balance: %w", err)
 		}
 	}
@@ -54,7 +54,7 @@ func (s *BalanceService) GetBalance(userID uint) (*models.Balance, error) {
 
 func (s *BalanceService) WithdrawBalance(userID uint, orderNumber string, amount float64) error {
 	if !utils.ValidateOrderNumber(orderNumber) {
-		s.logger.Warn("Invalid order number format for withdrawal", zap.String("number", orderNumber))
+		s.logger.Warn("Invalid order number format for withdrawal", "number", orderNumber)
 		return ErrInvalidOrderNumber
 	}
 
@@ -65,15 +65,15 @@ func (s *BalanceService) WithdrawBalance(userID uint, orderNumber string, amount
 	return s.db.GetDB().Transaction(func(tx *gorm.DB) error {
 		var balance models.Balance
 		if err := tx.Where("user_id = ?", userID).First(&balance).Error; err != nil {
-			s.logger.Error("Failed to get balance for withdrawal", zap.Error(err))
+			s.logger.Error("Failed to get balance for withdrawal", "error", err)
 			return fmt.Errorf("failed to get balance: %w", err)
 		}
 
 		if balance.Current < amount {
 			s.logger.Warn("Insufficient funds for withdrawal",
-				zap.Uint("userID", userID),
-				zap.Float64("current", balance.Current),
-				zap.Float64("requested", amount))
+				"userID", userID,
+				"current", balance.Current,
+				"requested", amount)
 			return ErrInsufficientFunds
 		}
 
@@ -81,7 +81,7 @@ func (s *BalanceService) WithdrawBalance(userID uint, orderNumber string, amount
 		balance.Withdrawn += amount
 
 		if err := tx.Save(&balance).Error; err != nil {
-			s.logger.Error("Failed to update balance", zap.Error(err))
+			s.logger.Error("Failed to update balance", "error", err)
 			return fmt.Errorf("failed to update balance: %w", err)
 		}
 
@@ -93,14 +93,14 @@ func (s *BalanceService) WithdrawBalance(userID uint, orderNumber string, amount
 		}
 
 		if err := tx.Create(&withdrawal).Error; err != nil {
-			s.logger.Error("Failed to create withdrawal record", zap.Error(err))
+			s.logger.Error("Failed to create withdrawal record", "error", err)
 			return fmt.Errorf("failed to create withdrawal: %w", err)
 		}
 
 		s.logger.Info("Withdrawal processed successfully",
-			zap.Uint("userID", userID),
-			zap.String("orderNumber", orderNumber),
-			zap.Float64("amount", amount))
+			"userID", userID,
+			"orderNumber", orderNumber,
+			"amount", amount)
 
 		return nil
 	})
@@ -110,10 +110,10 @@ func (s *BalanceService) GetWithdrawals(userID uint) ([]models.Withdrawal, error
 	var withdrawals []models.Withdrawal
 	err := s.db.GetDB().Where("user_id = ?", userID).Order("processed_at DESC").Find(&withdrawals).Error
 	if err != nil {
-		s.logger.Error("Failed to get withdrawals", zap.Error(err), zap.Uint("userID", userID))
+		s.logger.Error("Failed to get withdrawals", "error", err, "userID", userID)
 		return nil, fmt.Errorf("failed to get withdrawals: %w", err)
 	}
 
-	s.logger.Debug("Retrieved user withdrawals", zap.Uint("userID", userID), zap.Int("count", len(withdrawals)))
+	s.logger.Debug("Retrieved user withdrawals", "userID", userID, "count", len(withdrawals))
 	return withdrawals, nil
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/utils"
 
-	"go.uber.org/zap"
+	"github.com/gopybara/httpbara"
 	"gorm.io/gorm"
 )
 
@@ -21,10 +21,10 @@ var (
 
 type OrderService struct {
 	db     *database.DB
-	logger *zap.Logger
+	logger httpbara.Logger
 }
 
-func NewOrderService(db *database.DB, logger *zap.Logger) *OrderService {
+func NewOrderService(db *database.DB, logger httpbara.Logger) *OrderService {
 	return &OrderService{
 		db:     db,
 		logger: logger,
@@ -33,7 +33,7 @@ func NewOrderService(db *database.DB, logger *zap.Logger) *OrderService {
 
 func (s *OrderService) UploadOrder(userID uint, orderNumber string) error {
 	if !utils.ValidateOrderNumber(orderNumber) {
-		s.logger.Warn("Invalid order number format", zap.String("number", orderNumber))
+		s.logger.Warn("Invalid order number format", "number", orderNumber)
 		return ErrInvalidOrderNumber
 	}
 
@@ -41,16 +41,16 @@ func (s *OrderService) UploadOrder(userID uint, orderNumber string) error {
 	err := s.db.GetDB().Where("number = ?", orderNumber).First(&existingOrder).Error
 	if err == nil {
 		if existingOrder.UserID == userID {
-			s.logger.Info("Order already exists for user", zap.String("number", orderNumber), zap.Uint("userID", userID))
+			s.logger.Info("Order already exists for user", "number", orderNumber, "userID", userID)
 			return ErrOrderExists
 		} else {
-			s.logger.Warn("Order exists for another user", zap.String("number", orderNumber), zap.Uint("existingUserID", existingOrder.UserID), zap.Uint("requestUserID", userID))
+			s.logger.Warn("Order exists for another user", "number", orderNumber, "existingUserID", existingOrder.UserID, "requestUserID", userID)
 			return ErrOrderExistsOtherUser
 		}
 	}
 
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		s.logger.Error("Database error during order check", zap.Error(err))
+		s.logger.Error("Database error during order check", "error", err)
 		return fmt.Errorf("database error: %w", err)
 	}
 
@@ -62,11 +62,11 @@ func (s *OrderService) UploadOrder(userID uint, orderNumber string) error {
 	}
 
 	if err := s.db.GetDB().Create(&order).Error; err != nil {
-		s.logger.Error("Failed to create order", zap.Error(err))
+		s.logger.Error("Failed to create order", "error", err)
 		return fmt.Errorf("failed to create order: %w", err)
 	}
 
-	s.logger.Info("Order created successfully", zap.String("number", orderNumber), zap.Uint("userID", userID))
+	s.logger.Info("Order created successfully", "number", orderNumber, "userID", userID)
 	return nil
 }
 
@@ -74,10 +74,10 @@ func (s *OrderService) GetUserOrders(userID uint) ([]models.Order, error) {
 	var orders []models.Order
 	err := s.db.GetDB().Where("user_id = ?", userID).Order("uploaded_at DESC").Find(&orders).Error
 	if err != nil {
-		s.logger.Error("Failed to get user orders", zap.Error(err), zap.Uint("userID", userID))
+		s.logger.Error("Failed to get user orders", "error", err, "userID", userID)
 		return nil, fmt.Errorf("failed to get orders: %w", err)
 	}
 
-	s.logger.Debug("Retrieved user orders", zap.Uint("userID", userID), zap.Int("count", len(orders)))
+	s.logger.Debug("Retrieved user orders", "userID", userID, "count", len(orders))
 	return orders, nil
 }

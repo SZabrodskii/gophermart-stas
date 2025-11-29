@@ -10,7 +10,6 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type mockOrderService struct {
@@ -46,6 +45,14 @@ func (m *mockBalanceService) WithdrawBalance(userID uint, orderNumber string, am
 func (m *mockBalanceService) GetWithdrawals(userID uint) ([]models.Withdrawal, error) {
 	return nil, nil
 }
+
+type mockLogger struct{}
+
+func (m *mockLogger) Info(message string, args ...any)  {}
+func (m *mockLogger) Debug(message string, args ...any) {}
+func (m *mockLogger) Error(message string, args ...any) {}
+func (m *mockLogger) Panic(message string, args ...any) {}
+func (m *mockLogger) Warn(message string, args ...any)  {}
 
 func TestUploadOrder(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -96,7 +103,7 @@ func TestUploadOrder(t *testing.T) {
 			}
 
 			handler := &Handler{
-				logger:         zap.NewNop(),
+				logger:         &mockLogger{},
 				orderService:   mockOrder,
 				userService:    &mockUserService{},
 				balanceService: &mockBalanceService{},
@@ -155,7 +162,7 @@ func TestGetOrders(t *testing.T) {
 			}
 
 			handler := &Handler{
-				logger:         zap.NewNop(),
+				logger:         &mockLogger{},
 				orderService:   mockOrder,
 				userService:    &mockUserService{},
 				balanceService: &mockBalanceService{},
