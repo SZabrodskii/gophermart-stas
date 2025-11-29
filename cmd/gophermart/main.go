@@ -17,9 +17,10 @@ import (
 
 func main() {
 	app := fx.New(
-		logger.Module,
-		server.Module,
+		logger.ZapModule,
+		logger.HttpbaraLoggerModule,
 		services.Module,
+		server.Module,
 		fx.Provide(
 			config.New,
 			database.New,
@@ -38,10 +39,10 @@ func main() {
 	<-app.Done()
 }
 
-func StartServer(srv *server.Server, logger *zap.Logger) {
+func StartServer(srv *server.Server, zapLogger *zap.Logger) {
 	go func() {
 		if err := srv.Start(); err != nil {
-			logger.Fatal("HTTP server failed", zap.Error(err))
+			zapLogger.Fatal("HTTP server failed", zap.Error(err))
 		}
 	}()
 }

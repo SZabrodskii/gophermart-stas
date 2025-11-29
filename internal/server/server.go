@@ -10,21 +10,21 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/middleware"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gopybara/httpbara"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 type Server struct {
 	config  *config.Config
 	db      *database.DB
-	logger  *zap.Logger
+	logger  httpbara.Logger
 	router  *gin.Engine
 	handler *handlers.Handler
 }
 
-func New(cfg *config.Config, db *database.DB, logger *zap.Logger, handler *handlers.Handler) *Server {
+func New(cfg *config.Config, db *database.DB, logger httpbara.Logger, handler *handlers.Handler) *Server {
 	gin.SetMode(gin.ReleaseMode)
-	
+
 	return &Server{
 		config:  cfg,
 		db:      db,
@@ -41,7 +41,7 @@ func (s *Server) setupRoutes() {
 	s.router.Use(gin.Recovery())
 
 	api := s.router.Group("/api")
-	
+
 	userGroup := api.Group("/user")
 	{
 		userGroup.POST("/register", s.handler.Register)
@@ -69,7 +69,7 @@ func (s *Server) Start() error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	s.logger.Info("Starting HTTP server", zap.String("address", s.config.RunAddress))
+	s.logger.Info("Starting HTTP server", "address", s.config.RunAddress)
 	return srv.ListenAndServe()
 }
 
