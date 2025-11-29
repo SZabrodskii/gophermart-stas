@@ -106,7 +106,7 @@ func (oc *orderController) UploadOrder(ctx *gin.Context, _ *UploadOrderRequest) 
 	return &UploadOrderResponse{Code: http.StatusAccepted}, nil
 }
 
-func (oc *orderController) GetOrders(ctx context.Context, _ *struct{}) (*OrdersResponse, error) {
+func (oc *orderController) GetOrders(ctx context.Context, _ *struct{}) (OrdersResponse, error) {
 	userID, ok := GetUserIDFromContext(ctx)
 	if !ok {
 		oc.logger.Warn("User not authenticated")
@@ -120,6 +120,5 @@ func (oc *orderController) GetOrders(ctx context.Context, _ *struct{}) (*OrdersR
 	}
 
 	oc.logger.Info("Orders retrieved successfully", "count", len(orders), "user_id", userID)
-	response := OrdersResponse(orders)
-	return &response, nil
+	return OrdersResponse(orders), nil
 }

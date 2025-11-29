@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/domain"
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
+	"github.com/SZabrodskii/gophermart-stas/internal/services"
 	"github.com/gopybara/httpbara"
 	"github.com/gopybara/httpbara/casual"
 	"go.uber.org/fx"
@@ -83,30 +85,36 @@ func (bc *balanceController) Withdraw(ctx context.Context, req *models.Withdrawa
 
 	err := bc.balanceService.WithdrawBalance(userID, req.Order, req.Sum)
 	if err != nil {
-		bc.logger.Error("Failed to withdraw", "error", err, "user_id", userID, "order", req.Order, "amount", req.Sum)
-		return &WithdrawResponse{Code: http.StatusInternalServerError}, nil
+		switch {
+		case errors.Is(err, services.ErrInsufficientFunds):
+			bc.logger.Warn("Insufficient funds for withdrawal", "user_id", userID, "amount", req.Sum)
+			return &WithdrawResponse{Code: http.StatusPaymentRequired}, nil
+		case errors.Is(err, services.ErrInvalidOrderNumber):
+			bc.logger.Warn("Invalid order number format", "order", req.Order)
+			return &WithdrawResponse{Code: http.StatusUnprocessableEntity}, nil
+		default:
+			bc.logger.Error("Failed to withdraw", "error", err, "user_id", userID, "order", req.Order, "amount", req.Sum)
+			return &WithdrawResponse{Code: http.StatusInternalServerError}, nil
+		}
 	}
 
 	bc.logger.Info("Withdrawal successful", "user_id", userID, "order", req.Order, "amount", req.Sum)
 	return &WithdrawResponse{Code: http.StatusOK}, nil
 }
 
-func (bc *balanceController) Withdrawals(ctx context.Context, _ *struct{}) (*WithdrawalsResponse, error) {
+func (bc *balanceController) Withdrawals(ctx context.Context, _ *struct{}) (WithdrawalsResponse, error) {
 	userID, ok := GetUserIDFromContext(ctx)
 	if !ok {
 		bc.logger.Warn("User not authenticated")
-		response := WithdrawalsResponse([]models.Withdrawal{})
-		return &response, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
+		return nil, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
 	}
 
 	withdrawals, err := bc.balanceService.GetWithdrawals(userID)
 	if err != nil {
 		bc.logger.Error("Failed to get withdrawals", "error", err, "user_id", userID)
-		response := WithdrawalsResponse([]models.Withdrawal{})
-		return &response, casual.NewHTTPErrorFromMessage(500, "Failed to get withdrawals")
+		return nil, casual.NewHTTPErrorFromMessage(500, "Failed to get withdrawals")
 	}
 
 	bc.logger.Info("Withdrawals retrieved successfully", "count", len(withdrawals), "user_id", userID)
-	response := WithdrawalsResponse(withdrawals)
-	return &response, nil
+	return WithdrawalsResponse(withdrawals), nil
 }
