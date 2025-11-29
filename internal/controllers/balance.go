@@ -33,21 +33,21 @@ type balanceController struct {
 	balanceService domain.BalanceServiceI
 }
 
-type WithdrawalsResponse struct {
-	Withdrawals []models.Withdrawal
-}
+type WithdrawalsResponse []models.Withdrawal
 
 func (wr *WithdrawalsResponse) StatusCode() int {
-	if len(wr.Withdrawals) == 0 {
+	if len(*wr) == 0 {
 		return http.StatusNoContent
 	}
 	return http.StatusOK
 }
 
-type WithdrawResponse struct{}
+type WithdrawResponse struct {
+	Code int
+}
 
 func (wr *WithdrawResponse) StatusCode() int {
-	return http.StatusOK
+	return wr.Code
 }
 
 func NewBalanceController(in newBalanceControllerIn) (server.AsHandlerOut, error) {
@@ -78,32 +78,35 @@ func (bc *balanceController) Withdraw(ctx context.Context, req *models.Withdrawa
 	userID, ok := GetUserIDFromContext(ctx)
 	if !ok {
 		bc.logger.Warn("User not authenticated")
-		return nil, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
+		return &WithdrawResponse{Code: http.StatusUnauthorized}, nil
 	}
 
 	err := bc.balanceService.WithdrawBalance(userID, req.Order, req.Sum)
 	if err != nil {
 		bc.logger.Error("Failed to withdraw", "error", err, "user_id", userID, "order", req.Order, "amount", req.Sum)
-		return nil, casual.NewHTTPErrorFromMessage(500, "Failed to withdraw")
+		return &WithdrawResponse{Code: http.StatusInternalServerError}, nil
 	}
 
 	bc.logger.Info("Withdrawal successful", "user_id", userID, "order", req.Order, "amount", req.Sum)
-	return &WithdrawResponse{}, nil
+	return &WithdrawResponse{Code: http.StatusOK}, nil
 }
 
 func (bc *balanceController) Withdrawals(ctx context.Context, _ *struct{}) (*WithdrawalsResponse, error) {
 	userID, ok := GetUserIDFromContext(ctx)
 	if !ok {
 		bc.logger.Warn("User not authenticated")
-		return nil, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
+		response := WithdrawalsResponse([]models.Withdrawal{})
+		return &response, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
 	}
 
 	withdrawals, err := bc.balanceService.GetWithdrawals(userID)
 	if err != nil {
 		bc.logger.Error("Failed to get withdrawals", "error", err, "user_id", userID)
-		return nil, casual.NewHTTPErrorFromMessage(500, "Failed to get withdrawals")
+		response := WithdrawalsResponse([]models.Withdrawal{})
+		return &response, casual.NewHTTPErrorFromMessage(500, "Failed to get withdrawals")
 	}
 
 	bc.logger.Info("Withdrawals retrieved successfully", "count", len(withdrawals), "user_id", userID)
-	return &WithdrawalsResponse{Withdrawals: withdrawals}, nil
+	response := WithdrawalsResponse(withdrawals)
+	return &response, nil
 }

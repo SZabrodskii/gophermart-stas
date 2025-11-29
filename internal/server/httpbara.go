@@ -21,7 +21,7 @@ func AsHandler(handler any) (AsHandlerOut, error) {
 	return AsHandlerOut{Handler: h}, nil
 }
 
-type HttpServerParams struct {
+type HTTPServerParams struct {
 	Port string
 }
 
@@ -31,10 +31,10 @@ type httpServerIn struct {
 	Lifecycle fx.Lifecycle
 	Logger    httpbara.Logger
 	Handlers  []*httpbara.Handler `group:"handlers"`
-	Params    HttpServerParams
+	Params    HTTPServerParams
 }
 
-func NewHttpServer(in httpServerIn) (httpbara.Engine, error) {
+func NewHTTPServer(in httpServerIn) (httpbara.Engine, error) {
 	engine, err := httpbara.New(in.Handlers,
 		httpbara.WithLogger(in.Logger),
 	)
@@ -61,13 +61,13 @@ func NewHttpServer(in httpServerIn) (httpbara.Engine, error) {
 	return engine, nil
 }
 
-func ProvideHttpModule(port string) fx.Option {
+func ProvideHTTPModule(port string) fx.Option {
 	return fx.Options(
 		fx.Provide(
-			func() HttpServerParams {
-				return HttpServerParams{Port: port}
+			func() HTTPServerParams {
+				return HTTPServerParams{Port: port}
 			},
-			NewHttpServer,
+			NewHTTPServer,
 		),
 	)
 }

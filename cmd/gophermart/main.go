@@ -30,7 +30,7 @@ func createApp() fx.Option {
 		),
 
 		provideControllers(),
-		server.ProvideHttpModule("8080"),
+		server.ProvideHTTPModule("8080"),
 
 		fx.Invoke(func(engine httpbara.Engine) {
 		}),

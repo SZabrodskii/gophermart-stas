@@ -41,12 +41,10 @@ type UploadOrderRequest struct {
 	OrderNumber string
 }
 
-type OrdersResponse struct {
-	Orders []models.Order
-}
+type OrdersResponse []models.Order
 
 func (or *OrdersResponse) StatusCode() int {
-	if len(or.Orders) == 0 {
+	if len(*or) == 0 {
 		return http.StatusNoContent
 	}
 	return http.StatusOK
@@ -71,19 +69,19 @@ func (oc *orderController) UploadOrder(ctx *gin.Context, _ *UploadOrderRequest) 
 	userID, ok := GetUserIDFromContext(ctx.Request.Context())
 	if !ok {
 		oc.logger.Warn("User not authenticated")
-		return nil, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
+		return &UploadOrderResponse{Code: http.StatusUnauthorized}, nil
 	}
 
 	body, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
 		oc.logger.Error("Failed to read request body", "error", err)
-		return nil, casual.NewHTTPErrorFromMessage(400, "Failed to read request body")
+		return &UploadOrderResponse{Code: http.StatusBadRequest}, nil
 	}
 
 	orderNumber := strings.TrimSpace(string(body))
 	if orderNumber == "" {
 		oc.logger.Warn("Empty order number")
-		return nil, casual.NewHTTPErrorFromMessage(400, "Order number cannot be empty")
+		return &UploadOrderResponse{Code: http.StatusBadRequest}, nil
 	}
 
 	err = oc.orderService.UploadOrder(userID, orderNumber)
@@ -91,16 +89,16 @@ func (oc *orderController) UploadOrder(ctx *gin.Context, _ *UploadOrderRequest) 
 		switch {
 		case errors.Is(err, services.ErrInvalidOrderNumber):
 			oc.logger.Warn("Invalid order number format", "order_number", orderNumber)
-			return nil, casual.NewHTTPErrorFromMessage(422, "Invalid order number format")
+			return &UploadOrderResponse{Code: http.StatusUnprocessableEntity}, nil
 		case errors.Is(err, services.ErrOrderExists):
 			oc.logger.Info("Order already uploaded by user", "order_number", orderNumber, "user_id", userID)
 			return &UploadOrderResponse{Code: http.StatusOK}, nil
 		case errors.Is(err, services.ErrOrderExistsOtherUser):
 			oc.logger.Warn("Order already uploaded by different user", "order_number", orderNumber)
-			return nil, casual.NewHTTPErrorFromMessage(409, "Order already uploaded by different user")
+			return &UploadOrderResponse{Code: http.StatusConflict}, nil
 		default:
 			oc.logger.Error("Failed to upload order", "error", err, "order_number", orderNumber, "user_id", userID)
-			return nil, casual.NewHTTPErrorFromMessage(500, "Failed to upload order")
+			return &UploadOrderResponse{Code: http.StatusInternalServerError}, nil
 		}
 	}
 
@@ -122,5 +120,6 @@ func (oc *orderController) GetOrders(ctx context.Context, _ *struct{}) (*OrdersR
 	}
 
 	oc.logger.Info("Orders retrieved successfully", "count", len(orders), "user_id", userID)
-	return &OrdersResponse{Orders: orders}, nil
+	response := OrdersResponse(orders)
+	return &response, nil
 }
