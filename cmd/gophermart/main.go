@@ -1,48 +1,47 @@
 package main
 
 import (
-	"context"
-	"log"
-
+	"github.com/SZabrodskii/gophermart-stas/internal/accrual"
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
+	"github.com/SZabrodskii/gophermart-stas/internal/controllers"
 	"github.com/SZabrodskii/gophermart-stas/internal/database"
-	"github.com/SZabrodskii/gophermart-stas/internal/handlers"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
 	"github.com/SZabrodskii/gophermart-stas/pkg/logger"
 
+	"github.com/gopybara/httpbara"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 func main() {
-	app := fx.New(
+	fx.New(createApp()).Run()
+}
+
+func createApp() fx.Option {
+	return fx.Options(
 		logger.ZapModule,
 		logger.HttpbaraLoggerModule,
 		services.Module,
-		server.Module,
+
 		fx.Provide(
 			config.New,
 			database.New,
-			handlers.New,
+			accrual.ProvideClient,
 		),
-		fx.Invoke(StartServer),
+
+		provideControllers(),
+		server.ProvideHttpModule("8080"),
+
+		fx.Invoke(func(engine httpbara.Engine) {
+		}),
 	)
-
-	ctx := context.Background()
-	if err := app.Start(ctx); err != nil {
-		log.Fatalf("Failed to start application: %v", err)
-	}
-
-	log.Println("Gophermart loyalty system started successfully!")
-
-	<-app.Done()
 }
 
-func StartServer(srv *server.Server, zapLogger *zap.Logger) {
-	go func() {
-		if err := srv.Start(); err != nil {
-			zapLogger.Fatal("HTTP server failed", zap.Error(err))
-		}
-	}()
+func provideControllers() fx.Option {
+	return fx.Provide(
+		controllers.NewAuthController,
+		controllers.NewOrderController,
+		controllers.NewBalanceController,
+		controllers.NewJWTMiddleware,
+	)
 }
