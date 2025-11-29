@@ -18,7 +18,7 @@ import (
 type LogEntry struct {
 	Level   string `json:"level"`
 	Message string `json:"msg"`
-	Ts      string `json:"ts"`
+	TS      string `json:"ts"`
 }
 
 func setupTestLogger() (*ZapLogger, *bytes.Buffer) {

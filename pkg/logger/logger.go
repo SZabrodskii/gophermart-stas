@@ -57,19 +57,19 @@ func (l *ZapLogger) mapFields(fields ...any) []zap.Field {
 			} else {
 				var zapField zap.Field
 
-				switch field.(type) {
+				switch v := field.(type) {
 				case string:
-					zapField = zap.String(key, field.(string))
+					zapField = zap.String(key, v)
 				case int:
-					zapField = zap.Int(key, field.(int))
+					zapField = zap.Int(key, v)
 				case int64:
-					zapField = zap.Int64(key, field.(int64))
+					zapField = zap.Int64(key, v)
 				case uint:
-					zapField = zap.Uint32(key, uint32(field.(uint)))
+					zapField = zap.Uint32(key, uint32(v))
 				case float64:
-					zapField = zap.Float64(key, field.(float64))
+					zapField = zap.Float64(key, v)
 				default:
-					zapField = zap.Any(key, field)
+					zapField = zap.Any(key, v)
 				}
 
 				result = append(result, zapField)
