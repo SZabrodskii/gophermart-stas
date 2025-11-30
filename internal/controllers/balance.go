@@ -1,123 +1,110 @@
 package controllers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/domain"
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
-	"github.com/SZabrodskii/gophermart-stas/internal/server"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
 	"github.com/SZabrodskii/gophermart-stas/internal/utils"
-	"github.com/gopybara/httpbara"
-	"github.com/gopybara/httpbara/casual"
-	"go.uber.org/fx"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
-type balanceControllerDescription struct {
-	BalanceAPI  httpbara.Group `group:"/api/user"`
-	GetBalance  httpbara.Route `route:"GET /balance" group:"balanceapi" middlewares:"gzip,jwt"`
-	Withdraw    httpbara.Route `route:"POST /balance/withdraw" group:"balanceapi" middlewares:"gzip,jwt"`
-	Withdrawals httpbara.Route `route:"GET /withdrawals" group:"balanceapi" middlewares:"gzip,jwt"`
-}
-
-type newBalanceControllerIn struct {
-	fx.In
-
-	Logger         httpbara.Logger
-	BalanceService domain.BalanceServiceI
-}
-
-type balanceController struct {
-	balanceControllerDescription
-
-	logger         httpbara.Logger
+type BalanceControllerGin struct {
+	logger         *zap.Logger
 	balanceService domain.BalanceServiceI
 }
 
-type WithdrawResponse struct {
-	Code int
+func NewBalanceControllerGin(logger *zap.Logger, balanceService domain.BalanceServiceI) *BalanceControllerGin {
+	return &BalanceControllerGin{
+		logger:         logger,
+		balanceService: balanceService,
+	}
 }
 
-func (wr *WithdrawResponse) StatusCode() int {
-	return wr.Code
-}
-
-func NewBalanceController(in newBalanceControllerIn) (server.AsHandlerOut, error) {
-	return server.AsHandler(&balanceController{
-		logger:         in.Logger,
-		balanceService: in.BalanceService,
-	})
-}
-
-func (bc *balanceController) GetBalance(ctx context.Context, _ *struct{}) (*models.Balance, error) {
-	userID, ok := GetUserIDFromContext(ctx)
+func (bc *BalanceControllerGin) GetBalance(c *gin.Context) {
+	userID, ok := GetUserIDFromGinContext(c)
 	if !ok {
 		bc.logger.Warn("User not authenticated")
-		return nil, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
 	}
 
 	balance, err := bc.balanceService.GetBalance(userID)
 	if err != nil {
-		bc.logger.Error("Failed to get balance", "error", err, "user_id", userID)
-		return nil, casual.NewHTTPErrorFromMessage(500, "Failed to get balance")
+		bc.logger.Error("Failed to get balance", zap.Error(err), zap.Uint("user_id", userID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get balance"})
+		return
 	}
 
-	bc.logger.Info("Balance retrieved successfully", "user_id", userID, "balance", balance.Current)
-	return balance, nil
+	bc.logger.Info("Balance retrieved successfully", zap.Uint("user_id", userID), zap.Float64("balance", balance.Current))
+	c.JSON(http.StatusOK, balance)
 }
 
-func (bc *balanceController) Withdraw(ctx context.Context, req *models.WithdrawalRequest) (*WithdrawResponse, error) {
-	userID, ok := GetUserIDFromContext(ctx)
+func (bc *BalanceControllerGin) Withdraw(c *gin.Context) {
+	userID, ok := GetUserIDFromGinContext(c)
 	if !ok {
 		bc.logger.Warn("User not authenticated")
-		return &WithdrawResponse{Code: http.StatusUnauthorized}, nil
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req models.WithdrawalRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		bc.logger.Warn("Invalid request format", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
 	}
 
 	if !utils.ValidateOrderNumber(req.Order) {
-		bc.logger.Warn("Invalid order number format (Luhn algorithm)", "order", req.Order)
-		return &WithdrawResponse{Code: http.StatusUnprocessableEntity}, nil
+		bc.logger.Warn("Invalid order number format (Luhn algorithm)", zap.String("order", req.Order))
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Invalid order number format"})
+		return
 	}
 
 	err := bc.balanceService.WithdrawBalance(userID, req.Order, req.Sum)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInsufficientFunds):
-			bc.logger.Warn("Insufficient funds for withdrawal", "user_id", userID, "amount", req.Sum)
-			return &WithdrawResponse{Code: http.StatusPaymentRequired}, nil
+			bc.logger.Warn("Insufficient funds for withdrawal", zap.Uint("user_id", userID), zap.Float64("amount", req.Sum))
+			c.JSON(http.StatusPaymentRequired, gin.H{"error": "Insufficient funds"})
 		case errors.Is(err, services.ErrInvalidOrderNumber):
-			bc.logger.Warn("Invalid order number format", "order", req.Order)
-			return &WithdrawResponse{Code: http.StatusUnprocessableEntity}, nil
+			bc.logger.Warn("Invalid order number format", zap.String("order", req.Order))
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "Invalid order number format"})
 		default:
-			bc.logger.Error("Failed to withdraw", "error", err, "user_id", userID, "order", req.Order, "amount", req.Sum)
-			return &WithdrawResponse{Code: http.StatusInternalServerError}, nil
+			bc.logger.Error("Failed to withdraw", zap.Error(err), zap.Uint("user_id", userID), zap.String("order", req.Order), zap.Float64("amount", req.Sum))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		}
+		return
 	}
 
-	bc.logger.Info("Withdrawal successful", "user_id", userID, "order", req.Order, "amount", req.Sum)
-	return &WithdrawResponse{Code: http.StatusOK}, nil
+	bc.logger.Info("Withdrawal successful", zap.Uint("user_id", userID), zap.String("order", req.Order), zap.Float64("amount", req.Sum))
+	c.JSON(http.StatusOK, gin.H{"message": "Withdrawal successful"})
 }
 
-func (bc *balanceController) Withdrawals(ctx context.Context, _ *struct{}) ([]models.Withdrawal, error) {
-	userID, ok := GetUserIDFromContext(ctx)
+func (bc *BalanceControllerGin) GetWithdrawals(c *gin.Context) {
+	userID, ok := GetUserIDFromGinContext(c)
 	if !ok {
 		bc.logger.Warn("User not authenticated")
-		return nil, casual.NewHTTPErrorFromMessage(401, "Unauthorized")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
 	}
 
 	withdrawals, err := bc.balanceService.GetWithdrawals(userID)
 	if err != nil {
-		bc.logger.Error("Failed to get withdrawals", "error", err, "user_id", userID)
-		return nil, casual.NewHTTPErrorFromMessage(500, "Failed to get withdrawals")
+		bc.logger.Error("Failed to get withdrawals", zap.Error(err), zap.Uint("user_id", userID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get withdrawals"})
+		return
 	}
 
-	// Если нет списаний, возвращаем 204 No Content
 	if len(withdrawals) == 0 {
-		bc.logger.Info("Withdrawals retrieved successfully", "count", 0, "user_id", userID)
-		return nil, casual.NewHTTPErrorFromMessage(204, "")
+		bc.logger.Info("No withdrawals found", zap.Uint("user_id", userID))
+		c.Status(http.StatusNoContent)
+		return
 	}
 
-	bc.logger.Info("Withdrawals retrieved successfully", "count", len(withdrawals), "user_id", userID)
-	return withdrawals, nil
+	bc.logger.Info("Withdrawals retrieved successfully", zap.Int("count", len(withdrawals)), zap.Uint("user_id", userID))
+	c.JSON(http.StatusOK, withdrawals)
 }

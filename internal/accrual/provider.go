@@ -8,17 +8,17 @@ import (
 
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
-	"github.com/gopybara/httpbara"
+	"go.uber.org/zap"
 )
 
-func NewNoOpClient(logger httpbara.Logger) Client {
+func NewNoOpClient(logger *zap.Logger) Client {
 	return &noOpClient{
 		logger: logger,
 	}
 }
 
 type noOpClient struct {
-	logger httpbara.Logger
+	logger *zap.Logger
 }
 
 func (c *noOpClient) GetOrderAccrual(ctx context.Context, orderNumber string) (*models.AccrualResponse, error) {
@@ -33,7 +33,7 @@ func (c *noOpClient) Close() error {
 	return nil
 }
 
-func ProvideClient(cfg *config.Config, logger httpbara.Logger) (Client, error) {
+func ProvideClient(cfg *config.Config, logger *zap.Logger) (Client, error) {
 	baseURL := cfg.AccrualAddress
 	if baseURL == "" {
 		logger.Warn("Accrual system address not configured, creating no-op client")
@@ -63,10 +63,10 @@ func ProvideClient(cfg *config.Config, logger httpbara.Logger) (Client, error) {
 	client := NewClient(config, logger)
 
 	logger.Info("Accrual client created",
-		"base_url", config.BaseURL,
-		"timeout", config.Timeout.String(),
-		"max_retries", config.Retry.MaxRetries,
-		"requests_per_minute", config.RateLimit.RequestsPerMinute)
+		zap.String("base_url", config.BaseURL),
+		zap.String("timeout", config.Timeout.String()),
+		zap.Int("max_retries", config.Retry.MaxRetries),
+		zap.Int("requests_per_minute", config.RateLimit.RequestsPerMinute))
 
 	return client, nil
 }

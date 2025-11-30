@@ -13,9 +13,6 @@ type Client interface {
 	Close() error
 }
 
-// Добавляем алиас для совместимости
-type ClientI = Client
-
 type ClientConfig struct {
 	BaseURL   string
 	Timeout   time.Duration

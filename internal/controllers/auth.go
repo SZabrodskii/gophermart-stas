@@ -1,90 +1,116 @@
 package controllers
 
 import (
-	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/SZabrodskii/gophermart-stas/internal/auth"
 	"github.com/SZabrodskii/gophermart-stas/internal/domain"
-	"github.com/SZabrodskii/gophermart-stas/internal/models"
-	"github.com/SZabrodskii/gophermart-stas/internal/server"
-	"github.com/SZabrodskii/gophermart-stas/internal/services"
 	"github.com/gin-gonic/gin"
-	"github.com/gopybara/httpbara"
-	"github.com/gopybara/httpbara/casual"
-	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
-type authControllerDescription struct {
-	API      httpbara.Group `group:"/api/user"`
-	Register httpbara.Route `route:"POST /register" group:"api" middlewares:"gzip"`
-	Login    httpbara.Route `route:"POST /login" group:"api" middlewares:"gzip"`
-}
-
-type newAuthControllerIn struct {
-	fx.In
-
-	Logger      httpbara.Logger
-	UserService domain.UserServiceI
-}
-
-type authController struct {
-	authControllerDescription
-
-	logger      httpbara.Logger
+type AuthControllerGin struct {
+	logger      *zap.Logger
 	userService domain.UserServiceI
 }
 
-type AuthResponse struct{}
-
-func (ar *AuthResponse) StatusCode() int {
-	return http.StatusOK
+func NewAuthControllerGin(logger *zap.Logger, userService domain.UserServiceI) *AuthControllerGin {
+	return &AuthControllerGin{
+		logger:      logger,
+		userService: userService,
+	}
 }
 
-func NewAuthController(in newAuthControllerIn) (server.AsHandlerOut, error) {
-	return server.AsHandler(&authController{
-		logger:      in.Logger,
-		userService: in.UserService,
-	})
+type AuthRequest struct {
+	Login    string `json:"login" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
-func (ac *authController) Register(ctx *gin.Context, req *models.UserRequest) (*AuthResponse, error) {
-	if req.Login == "" || req.Password == "" {
-		ac.logger.Warn("Missing login or password")
-		return nil, casual.NewHTTPErrorFromMessage(400, "Login and password are required")
+func (ac *AuthControllerGin) Register(c *gin.Context) {
+	var req AuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ac.logger.Warn("Invalid request format", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
 	}
 
 	token, err := ac.userService.Register(req.Login, req.Password)
 	if err != nil {
-		if errors.Is(err, services.ErrUserExists) {
-			ac.logger.Warn("User already exists", "login", req.Login)
-			return nil, casual.NewHTTPErrorFromMessage(409, "User already exists")
+		switch err.Error() {
+		case "user already exists":
+			ac.logger.Warn("User already exists", zap.String("login", req.Login))
+			c.JSON(http.StatusConflict, gin.H{"error": "User already exists"})
+		default:
+			ac.logger.Error("Failed to register user", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		}
-		ac.logger.Error("Failed to register user", "error", err, "login", req.Login)
-		return nil, casual.NewHTTPErrorFromMessage(500, "Registration failed")
+		return
 	}
 
-	ctx.Header("Authorization", "Bearer "+token)
-	ac.logger.Info("User registered successfully", "login", req.Login)
-	return &AuthResponse{}, nil
+	ac.logger.Info("User registered successfully", zap.String("login", req.Login))
+	c.Header("Authorization", "Bearer "+token)
+	c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
 }
 
-func (ac *authController) Login(ctx *gin.Context, req *models.UserRequest) (*AuthResponse, error) {
-	if req.Login == "" || req.Password == "" {
-		ac.logger.Warn("Missing login or password")
-		return nil, casual.NewHTTPErrorFromMessage(400, "Login and password are required")
+func (ac *AuthControllerGin) Login(c *gin.Context) {
+	var req AuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ac.logger.Warn("Invalid request format", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
 	}
 
 	token, err := ac.userService.Login(req.Login, req.Password)
 	if err != nil {
-		if errors.Is(err, services.ErrInvalidCredentials) {
-			ac.logger.Warn("Invalid credentials", "login", req.Login)
-			return nil, casual.NewHTTPErrorFromMessage(401, "Invalid credentials")
-		}
-		ac.logger.Error("Failed to login user", "error", err, "login", req.Login)
-		return nil, casual.NewHTTPErrorFromMessage(500, "Login failed")
+		ac.logger.Warn("Invalid credentials", zap.String("login", req.Login))
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
 	}
 
-	ctx.Header("Authorization", "Bearer "+token)
-	ac.logger.Info("User logged in successfully", "login", req.Login)
-	return &AuthResponse{}, nil
+	ac.logger.Info("User logged in successfully", zap.String("login", req.Login))
+	c.Header("Authorization", "Bearer "+token)
+	c.JSON(http.StatusOK, gin.H{"message": "User logged in successfully"})
+}
+
+func (ac *AuthControllerGin) JWTMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			ac.logger.Warn("Missing Authorization header")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization required"})
+			c.Abort()
+			return
+		}
+
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			ac.logger.Warn("Invalid Authorization header format")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authorization format"})
+			c.Abort()
+			return
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		claims, err := auth.ParseJWT(tokenString)
+		if err != nil {
+			ac.logger.Warn("Invalid JWT token", zap.Error(err))
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", claims.UserID)
+		c.Set("login", claims.Login)
+		c.Next()
+	}
+}
+
+func GetUserIDFromGinContext(c *gin.Context) (uint, bool) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		return 0, false
+	}
+
+	id, ok := userID.(uint)
+	return id, ok
 }

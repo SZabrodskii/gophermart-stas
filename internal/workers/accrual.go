@@ -7,8 +7,8 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/accrual"
 	"github.com/SZabrodskii/gophermart-stas/internal/domain"
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
-	"github.com/gopybara/httpbara"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 type AccrualWorkerI interface {
@@ -19,17 +19,17 @@ type AccrualWorkerI interface {
 type newAccrualWorkerIn struct {
 	fx.In
 
-	Logger         httpbara.Logger
+	Logger         *zap.Logger
 	OrderService   domain.OrderServiceI
 	BalanceService domain.BalanceServiceI
-	AccrualClient  accrual.ClientI
+	AccrualClient  accrual.Client
 }
 
 type accrualWorker struct {
-	logger         httpbara.Logger
+	logger         *zap.Logger
 	orderService   domain.OrderServiceI
 	balanceService domain.BalanceServiceI
-	accrualClient  accrual.ClientI
+	accrualClient  accrual.Client
 	stopCh         chan struct{}
 }
 
@@ -70,7 +70,7 @@ func (aw *accrualWorker) Stop() {
 func (aw *accrualWorker) processOrders(ctx context.Context) {
 	orders, err := aw.orderService.GetOrdersForProcessing()
 	if err != nil {
-		aw.logger.Error("Failed to get orders for processing", "error", err)
+		aw.logger.Error("Failed to get orders for processing", zap.Error(err))
 		return
 	}
 
@@ -87,7 +87,7 @@ func (aw *accrualWorker) processOrders(ctx context.Context) {
 func (aw *accrualWorker) processOrder(ctx context.Context, order *models.Order) {
 	accrualInfo, err := aw.accrualClient.GetOrderInfo(ctx, order.Number)
 	if err != nil {
-		aw.logger.Error("Failed to get order info from accrual", "error", err, "order", order.Number)
+		aw.logger.Error("Failed to get order info from accrual", zap.Error(err), zap.String("order", order.Number))
 		return
 	}
 
@@ -104,7 +104,11 @@ func (aw *accrualWorker) processOrder(ctx context.Context, order *models.Order) 
 		return
 	}
 
-	aw.logger.Info("Updating order", "order", order.Number, "old_status", order.Status, "new_status", internalStatus, "external_status", accrualInfo.Status)
+	aw.logger.Info("Updating order",
+		zap.String("order", order.Number),
+		zap.String("old_status", order.Status),
+		zap.String("new_status", internalStatus),
+		zap.String("external_status", accrualInfo.Status))
 
 	var accrualValue float64
 	if accrualInfo.Accrual != nil {
@@ -113,17 +117,17 @@ func (aw *accrualWorker) processOrder(ctx context.Context, order *models.Order) 
 
 	err = aw.orderService.UpdateOrderStatus(order.Number, internalStatus, accrualValue)
 	if err != nil {
-		aw.logger.Error("Failed to update order", "error", err, "order", order.Number)
+		aw.logger.Error("Failed to update order", zap.Error(err), zap.String("order", order.Number))
 		return
 	}
 
 	if internalStatus == models.OrderStatusProcessed && accrualInfo.Accrual != nil && *accrualInfo.Accrual > 0 {
 		err = aw.balanceService.AddBalance(order.UserID, *accrualInfo.Accrual)
 		if err != nil {
-			aw.logger.Error("Failed to add balance", "error", err, "user_id", order.UserID, "amount", *accrualInfo.Accrual)
+			aw.logger.Error("Failed to add balance", zap.Error(err), zap.Uint("user_id", order.UserID), zap.Float64("amount", *accrualInfo.Accrual))
 			return
 		}
-		aw.logger.Info("Balance added", "user_id", order.UserID, "amount", *accrualInfo.Accrual, "order", order.Number)
+		aw.logger.Info("Balance added", zap.Uint("user_id", order.UserID), zap.Float64("amount", *accrualInfo.Accrual), zap.String("order", order.Number))
 	}
 }
 
@@ -138,7 +142,7 @@ func (aw *accrualWorker) mapExternalStatus(externalStatus string) string {
 	case accrual.StatusProcessed:
 		return models.OrderStatusProcessed
 	default:
-		aw.logger.Warn("Unknown external accrual status", "status", externalStatus)
+		aw.logger.Warn("Unknown external accrual status", zap.String("status", externalStatus))
 		return externalStatus
 	}
 }
