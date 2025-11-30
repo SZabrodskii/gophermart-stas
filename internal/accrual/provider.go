@@ -1,19 +1,43 @@
 package accrual
 
 import (
-	"fmt"
+	"context"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
+	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/gopybara/httpbara"
 )
+
+func NewNoOpClient(logger httpbara.Logger) Client {
+	return &noOpClient{
+		logger: logger,
+	}
+}
+
+type noOpClient struct {
+	logger httpbara.Logger
+}
+
+func (c *noOpClient) GetOrderAccrual(ctx context.Context, orderNumber string) (*models.AccrualResponse, error) {
+	return nil, nil
+}
+
+func (c *noOpClient) GetOrderInfo(ctx context.Context, orderNumber string) (*models.AccrualResponse, error) {
+	return nil, nil
+}
+
+func (c *noOpClient) Close() error {
+	return nil
+}
 
 func ProvideClient(cfg *config.Config, logger httpbara.Logger) (Client, error) {
 	baseURL := cfg.AccrualAddress
 	if baseURL == "" {
-		return nil, fmt.Errorf("accrual system address is required (use -r flag or ACCRUAL_SYSTEM_ADDRESS environment variable)")
+		logger.Warn("Accrual system address not configured, creating no-op client")
+		return NewNoOpClient(logger), nil
 	}
 
 	config := DefaultClientConfig(baseURL)

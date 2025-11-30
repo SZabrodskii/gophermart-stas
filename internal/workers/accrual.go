@@ -91,7 +91,10 @@ func (aw *accrualWorker) processOrder(ctx context.Context, order *models.Order) 
 		return
 	}
 
-	// Map external accrual statuses to internal order statuses
+	if accrualInfo == nil {
+		return
+	}
+
 	internalStatus := aw.mapExternalStatus(accrualInfo.Status)
 
 	accrualEqual := (order.Accrual == nil && accrualInfo.Accrual == nil) ||
@@ -124,7 +127,6 @@ func (aw *accrualWorker) processOrder(ctx context.Context, order *models.Order) 
 	}
 }
 
-// mapExternalStatus maps external accrual system statuses to internal order statuses
 func (aw *accrualWorker) mapExternalStatus(externalStatus string) string {
 	switch externalStatus {
 	case accrual.StatusRegistered:
@@ -136,7 +138,6 @@ func (aw *accrualWorker) mapExternalStatus(externalStatus string) string {
 	case accrual.StatusProcessed:
 		return models.OrderStatusProcessed
 	default:
-		// Log warning for unknown status and return as-is
 		aw.logger.Warn("Unknown external accrual status", "status", externalStatus)
 		return externalStatus
 	}
