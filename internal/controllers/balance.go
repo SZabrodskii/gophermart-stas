@@ -9,6 +9,7 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
+	"github.com/SZabrodskii/gophermart-stas/internal/utils"
 	"github.com/gopybara/httpbara"
 	"github.com/gopybara/httpbara/casual"
 	"go.uber.org/fx"
@@ -81,6 +82,11 @@ func (bc *balanceController) Withdraw(ctx context.Context, req *models.Withdrawa
 	if !ok {
 		bc.logger.Warn("User not authenticated")
 		return &WithdrawResponse{Code: http.StatusUnauthorized}, nil
+	}
+
+	if !utils.ValidateOrderNumber(req.Order) {
+		bc.logger.Warn("Invalid order number format (Luhn algorithm)", "order", req.Order)
+		return &WithdrawResponse{Code: http.StatusUnprocessableEntity}, nil
 	}
 
 	err := bc.balanceService.WithdrawBalance(userID, req.Order, req.Sum)

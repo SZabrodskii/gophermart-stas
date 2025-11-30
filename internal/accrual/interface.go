@@ -9,8 +9,12 @@ import (
 
 type Client interface {
 	GetOrderAccrual(ctx context.Context, orderNumber string) (*models.AccrualResponse, error)
+	GetOrderInfo(ctx context.Context, orderNumber string) (*models.AccrualResponse, error)
 	Close() error
 }
+
+// Добавляем алиас для совместимости
+type ClientI = Client
 
 type ClientConfig struct {
 	BaseURL   string

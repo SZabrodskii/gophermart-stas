@@ -117,3 +117,36 @@ func (s *BalanceService) GetWithdrawals(userID uint) ([]models.Withdrawal, error
 	s.logger.Debug("Retrieved user withdrawals", "userID", userID, "count", len(withdrawals))
 	return withdrawals, nil
 }
+
+func (s *BalanceService) AddBalance(userID uint, amount float64) error {
+	return s.db.GetDB().Transaction(func(tx *gorm.DB) error {
+		var balance models.Balance
+		err := tx.Where("user_id = ?", userID).First(&balance).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				balance = models.Balance{
+					UserID:  userID,
+					Current: amount,
+				}
+				err = tx.Create(&balance).Error
+				if err != nil {
+					s.logger.Error("Failed to create balance", "error", err, "userID", userID)
+					return fmt.Errorf("failed to create balance: %w", err)
+				}
+			} else {
+				s.logger.Error("Failed to get balance", "error", err, "userID", userID)
+				return fmt.Errorf("failed to get balance: %w", err)
+			}
+		} else {
+			balance.Current += amount
+			err = tx.Save(&balance).Error
+			if err != nil {
+				s.logger.Error("Failed to update balance", "error", err, "userID", userID)
+				return fmt.Errorf("failed to update balance: %w", err)
+			}
+		}
+
+		s.logger.Info("Balance added successfully", "userID", userID, "amount", amount, "newBalance", balance.Current)
+		return nil
+	})
+}

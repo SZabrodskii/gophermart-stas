@@ -81,3 +81,33 @@ func (s *OrderService) GetUserOrders(userID uint) ([]models.Order, error) {
 	s.logger.Debug("Retrieved user orders", "userID", userID, "count", len(orders))
 	return orders, nil
 }
+
+func (s *OrderService) GetOrdersForProcessing() ([]*models.Order, error) {
+	var orders []*models.Order
+	err := s.db.GetDB().Where("status IN (?)", []string{models.OrderStatusNew, models.OrderStatusProcessing}).Find(&orders).Error
+	if err != nil {
+		s.logger.Error("Failed to get orders for processing", "error", err)
+		return nil, fmt.Errorf("failed to get orders for processing: %w", err)
+	}
+
+	return orders, nil
+}
+
+func (s *OrderService) UpdateOrderStatus(orderNumber string, status string, accrual float64) error {
+	updates := map[string]interface{}{
+		"status": status,
+	}
+
+	if accrual > 0 {
+		updates["accrual"] = &accrual
+	}
+
+	err := s.db.GetDB().Model(&models.Order{}).Where("number = ?", orderNumber).Updates(updates).Error
+	if err != nil {
+		s.logger.Error("Failed to update order status", "error", err, "order", orderNumber, "status", status)
+		return fmt.Errorf("failed to update order status: %w", err)
+	}
+
+	s.logger.Info("Order status updated", "order", orderNumber, "status", status, "accrual", accrual)
+	return nil
+}

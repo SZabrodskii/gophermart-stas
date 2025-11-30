@@ -11,6 +11,7 @@ import (
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
+	"github.com/SZabrodskii/gophermart-stas/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gopybara/httpbara"
 	"github.com/gopybara/httpbara/casual"
@@ -82,6 +83,11 @@ func (oc *orderController) UploadOrder(ctx *gin.Context, _ *UploadOrderRequest) 
 	if orderNumber == "" {
 		oc.logger.Warn("Empty order number")
 		return &UploadOrderResponse{Code: http.StatusBadRequest}, nil
+	}
+
+	if !utils.ValidateOrderNumber(orderNumber) {
+		oc.logger.Warn("Invalid order number format (Luhn algorithm)", "order_number", orderNumber)
+		return &UploadOrderResponse{Code: http.StatusUnprocessableEntity}, nil
 	}
 
 	err = oc.orderService.UploadOrder(userID, orderNumber)

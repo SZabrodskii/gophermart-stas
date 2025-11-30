@@ -16,8 +16,8 @@ import (
 
 type authControllerDescription struct {
 	API      httpbara.Group `group:"/api/user"`
-	Register httpbara.Route `route:"POST /register" group:"api"`
-	Login    httpbara.Route `route:"POST /login" group:"api"`
+	Register httpbara.Route `route:"POST /register" group:"api" middlewares:""`
+	Login    httpbara.Route `route:"POST /login" group:"api" middlewares:""`
 }
 
 type newAuthControllerIn struct {

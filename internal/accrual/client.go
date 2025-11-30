@@ -84,6 +84,11 @@ func (c *httpClient) GetOrderAccrual(ctx context.Context, orderNumber string) (*
 	return response, nil
 }
 
+// GetOrderInfo - алиас для GetOrderAccrual для совместимости
+func (c *httpClient) GetOrderInfo(ctx context.Context, orderNumber string) (*models.AccrualResponse, error) {
+	return c.GetOrderAccrual(ctx, orderNumber)
+}
+
 func (c *httpClient) makeRequest(ctx context.Context, url string) (*models.AccrualResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

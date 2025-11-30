@@ -42,6 +42,6 @@ func provideControllers() fx.Option {
 		controllers.NewAuthController,
 		controllers.NewOrderController,
 		controllers.NewBalanceController,
-		controllers.NewJWTMiddleware,
+		controllers.NewMiddlewareController,
 	)
 }
