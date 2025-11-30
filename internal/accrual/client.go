@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gopybara/httpbara"
+	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
@@ -21,10 +21,10 @@ type httpClient struct {
 	client  *http.Client
 	config  ClientConfig
 	limiter *rate.Limiter
-	logger  httpbara.Logger
+	logger  *zap.Logger
 }
 
-func NewClient(config ClientConfig, logger httpbara.Logger) Client {
+func NewClient(config ClientConfig, logger *zap.Logger) Client {
 	limiter := rate.NewLimiter(
 		rate.Every(time.Minute/time.Duration(config.RateLimit.RequestsPerMinute)),
 		config.RateLimit.BurstSize,
@@ -58,10 +58,10 @@ func (c *httpClient) GetOrderAccrual(ctx context.Context, orderNumber string) (*
 			if attempt < c.config.Retry.MaxRetries {
 				delay := c.calculateBackoffDelay(attempt)
 				c.logger.Info("Request failed, retrying",
-					"attempt", attempt+1,
-					"max_attempts", c.config.Retry.MaxRetries+1,
-					"delay", delay.String(),
-					"error", err.Error())
+					zap.Int("attempt", attempt+1),
+					zap.Int("max_attempts", c.config.Retry.MaxRetries+1),
+					zap.String("delay", delay.String()),
+					zap.String("error", err.Error()))
 
 				select {
 				case <-time.After(delay):
@@ -82,6 +82,10 @@ func (c *httpClient) GetOrderAccrual(ctx context.Context, orderNumber string) (*
 	}
 
 	return response, nil
+}
+
+func (c *httpClient) GetOrderInfo(ctx context.Context, orderNumber string) (*models.AccrualResponse, error) {
+	return c.GetOrderAccrual(ctx, orderNumber)
 }
 
 func (c *httpClient) makeRequest(ctx context.Context, url string) (*models.AccrualResponse, error) {

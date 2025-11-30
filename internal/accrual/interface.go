@@ -9,6 +9,7 @@ import (
 
 type Client interface {
 	GetOrderAccrual(ctx context.Context, orderNumber string) (*models.AccrualResponse, error)
+	GetOrderInfo(ctx context.Context, orderNumber string) (*models.AccrualResponse, error)
 	Close() error
 }
 

@@ -10,7 +10,7 @@ type Withdrawal struct {
 	ID          uint           `json:"-" gorm:"primaryKey"`
 	UserID      uint           `json:"-" gorm:"not null;index"`
 	User        User           `json:"-" gorm:"foreignKey:UserID"`
-	Order       string         `json:"order" gorm:"column:order_number;not null"`
+	Order       string         `json:"order" gorm:"not null"`
 	Sum         float64        `json:"sum" gorm:"not null"`
 	ProcessedAt time.Time      `json:"processed_at"`
 	CreatedAt   time.Time      `json:"-"`

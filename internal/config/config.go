@@ -16,7 +16,7 @@ func New() (*Config, error) {
 
 	flag.StringVar(&cfg.RunAddress, "a", ":8080", "server address")
 	flag.StringVar(&cfg.DatabaseURI, "d", "postgres:///postgres?host=/var/run/postgresql&sslmode=disable", "database connection string")
-	flag.StringVar(&cfg.AccrualAddress, "r", "http://localhost:8081", "accrual system address")
+	flag.StringVar(&cfg.AccrualAddress, "r", "", "accrual system address")
 
 	flag.Parse()
 

@@ -10,10 +10,13 @@ type UserServiceI interface {
 type OrderServiceI interface {
 	UploadOrder(userID uint, orderNumber string) error
 	GetUserOrders(userID uint) ([]models.Order, error)
+	GetOrdersForProcessing() ([]*models.Order, error)
+	UpdateOrderStatus(orderNumber string, status string, accrual float64) error
 }
 
 type BalanceServiceI interface {
 	GetBalance(userID uint) (*models.Balance, error)
 	WithdrawBalance(userID uint, orderNumber string, amount float64) error
 	GetWithdrawals(userID uint) ([]models.Withdrawal, error)
+	AddBalance(userID uint, amount float64) error
 }

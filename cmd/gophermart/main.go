@@ -1,15 +1,17 @@
 package main
 
 import (
+	"context"
+
 	"github.com/SZabrodskii/gophermart-stas/internal/accrual"
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/SZabrodskii/gophermart-stas/internal/controllers"
 	"github.com/SZabrodskii/gophermart-stas/internal/database"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
+	"github.com/SZabrodskii/gophermart-stas/internal/workers"
 	"github.com/SZabrodskii/gophermart-stas/pkg/logger"
 
-	"github.com/gopybara/httpbara"
 	"go.uber.org/fx"
 )
 
@@ -19,29 +21,35 @@ func main() {
 
 func createApp() fx.Option {
 	return fx.Options(
-		logger.ZapModule,
-		logger.HttpbaraLoggerModule,
+		logger.Module,
 		services.Module,
 
 		fx.Provide(
 			config.New,
 			database.New,
 			accrual.ProvideClient,
+			workers.NewAccrualWorker,
+			server.NewGinEngine,
 		),
 
 		provideControllers(),
-		server.ProvideHTTPModule("8080"),
 
-		fx.Invoke(func(engine httpbara.Engine) {
+		fx.Invoke(func(engine *server.GinEngine, worker workers.AccrualWorkerI, lc fx.Lifecycle) {
+			lc.Append(fx.Hook{
+				OnStart: func(ctx context.Context) error {
+					go worker.Start(ctx)
+					go engine.Start(ctx)
+					return nil
+				},
+			})
 		}),
 	)
 }
 
 func provideControllers() fx.Option {
 	return fx.Provide(
-		controllers.NewAuthController,
-		controllers.NewOrderController,
-		controllers.NewBalanceController,
-		controllers.NewJWTMiddleware,
+		fx.Annotate(controllers.NewAuthControllerGin, fx.As(new(server.AuthControllerI))),
+		fx.Annotate(controllers.NewOrderControllerGin, fx.As(new(server.OrderControllerI))),
+		fx.Annotate(controllers.NewBalanceControllerGin, fx.As(new(server.BalanceControllerI))),
 	)
 }

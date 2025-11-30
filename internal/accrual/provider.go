@@ -1,18 +1,43 @@
 package accrual
 
 import (
-	"fmt"
+	"context"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/gopybara/httpbara"
+	"github.com/SZabrodskii/gophermart-stas/internal/config"
+	"github.com/SZabrodskii/gophermart-stas/internal/models"
+	"go.uber.org/zap"
 )
 
-func ProvideClient(logger httpbara.Logger) (Client, error) {
-	baseURL := os.Getenv("ACCRUAL_SYSTEM_ADDRESS")
+func NewNoOpClient(logger *zap.Logger) Client {
+	return &noOpClient{
+		logger: logger,
+	}
+}
+
+type noOpClient struct {
+	logger *zap.Logger
+}
+
+func (c *noOpClient) GetOrderAccrual(ctx context.Context, orderNumber string) (*models.AccrualResponse, error) {
+	return nil, nil
+}
+
+func (c *noOpClient) GetOrderInfo(ctx context.Context, orderNumber string) (*models.AccrualResponse, error) {
+	return nil, nil
+}
+
+func (c *noOpClient) Close() error {
+	return nil
+}
+
+func ProvideClient(cfg *config.Config, logger *zap.Logger) (Client, error) {
+	baseURL := cfg.AccrualAddress
 	if baseURL == "" {
-		return nil, fmt.Errorf("ACCRUAL_SYSTEM_ADDRESS environment variable is required")
+		logger.Warn("Accrual system address not configured, creating no-op client")
+		return NewNoOpClient(logger), nil
 	}
 
 	config := DefaultClientConfig(baseURL)
@@ -38,10 +63,10 @@ func ProvideClient(logger httpbara.Logger) (Client, error) {
 	client := NewClient(config, logger)
 
 	logger.Info("Accrual client created",
-		"base_url", config.BaseURL,
-		"timeout", config.Timeout.String(),
-		"max_retries", config.Retry.MaxRetries,
-		"requests_per_minute", config.RateLimit.RequestsPerMinute)
+		zap.String("base_url", config.BaseURL),
+		zap.String("timeout", config.Timeout.String()),
+		zap.Int("max_retries", config.Retry.MaxRetries),
+		zap.Int("requests_per_minute", config.RateLimit.RequestsPerMinute))
 
 	return client, nil
 }

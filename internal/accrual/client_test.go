@@ -13,15 +13,13 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/models"
-	"github.com/SZabrodskii/gophermart-stas/pkg/logger"
 )
 
 func TestNewClient(t *testing.T) {
 	log := zaptest.NewLogger(t)
-	httpbaraLogger := logger.NewZapLogger(log)
 
 	config := DefaultClientConfig("http://localhost:8081")
-	client := NewClient(config, httpbaraLogger)
+	client := NewClient(config, log)
 
 	assert.NotNil(t, client)
 	assert.NoError(t, client.Close())
@@ -45,9 +43,8 @@ func TestHttpClient_GetOrderAccrual_Success(t *testing.T) {
 	defer server.Close()
 
 	log := zaptest.NewLogger(t)
-	httpbaraLogger := logger.NewZapLogger(log)
 	config := DefaultClientConfig(server.URL)
-	client := NewClient(config, httpbaraLogger)
+	client := NewClient(config, log)
 	defer client.Close()
 
 	ctx := context.Background()
@@ -67,10 +64,9 @@ func TestHttpClient_GetOrderAccrual_NoContent(t *testing.T) {
 	defer server.Close()
 
 	log := zaptest.NewLogger(t)
-	httpbaraLogger := logger.NewZapLogger(log)
 	config := DefaultClientConfig(server.URL)
 	config.Retry.MaxRetries = 0
-	client := NewClient(config, httpbaraLogger)
+	client := NewClient(config, log)
 	defer client.Close()
 
 	ctx := context.Background()
@@ -89,10 +85,9 @@ func TestHttpClient_GetOrderAccrual_TooManyRequests(t *testing.T) {
 	defer server.Close()
 
 	log := zaptest.NewLogger(t)
-	httpbaraLogger := logger.NewZapLogger(log)
 	config := DefaultClientConfig(server.URL)
 	config.Retry.MaxRetries = 0
-	client := NewClient(config, httpbaraLogger)
+	client := NewClient(config, log)
 	defer client.Close()
 
 	ctx := context.Background()
