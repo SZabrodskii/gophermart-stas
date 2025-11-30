@@ -6,13 +6,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/gopybara/httpbara"
 )
 
-func ProvideClient(logger httpbara.Logger) (Client, error) {
-	baseURL := os.Getenv("ACCRUAL_SYSTEM_ADDRESS")
+func ProvideClient(cfg *config.Config, logger httpbara.Logger) (Client, error) {
+	baseURL := cfg.AccrualAddress
 	if baseURL == "" {
-		return nil, fmt.Errorf("ACCRUAL_SYSTEM_ADDRESS environment variable is required")
+		return nil, fmt.Errorf("accrual system address is required (use -r flag or ACCRUAL_SYSTEM_ADDRESS environment variable)")
 	}
 
 	config := DefaultClientConfig(baseURL)

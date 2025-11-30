@@ -91,6 +91,11 @@ func (aw *accrualWorker) processOrder(ctx context.Context, order *models.Order) 
 		return
 	}
 
+	// Если accrual client вернул nil (mock client), пропускаем обработку
+	if accrualInfo == nil {
+		return
+	}
+
 	accrualEqual := (order.Accrual == nil && accrualInfo.Accrual == nil) ||
 		(order.Accrual != nil && accrualInfo.Accrual != nil && *order.Accrual == *accrualInfo.Accrual)
 
