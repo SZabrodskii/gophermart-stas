@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"strings"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/gopybara/httpbara"
@@ -46,9 +45,9 @@ func NewHTTPServer(in httpServerIn) (httpbara.Engine, error) {
 
 	in.Lifecycle.Append(fx.Hook{
 		OnStart: func(context.Context) error {
-			in.Logger.Info("Starting HTTP server", "port", in.Params.Port)
+			in.Logger.Info("Starting HTTP server", "address", in.Params.Port)
 			go func() {
-				if err := engine.Run(":" + in.Params.Port); err != nil {
+				if err := engine.Run(in.Params.Port); err != nil {
 					in.Logger.Error("Server failed", "error", err)
 				}
 			}()
@@ -64,9 +63,11 @@ func NewHTTPServer(in httpServerIn) (httpbara.Engine, error) {
 }
 
 func NewHTTPServerParams(cfg *config.Config) HTTPServerParams {
-	port := cfg.RunAddress
-	port = strings.TrimPrefix(port, ":")
-	return HTTPServerParams{Port: port}
+	address := cfg.RunAddress
+	// If address starts with ":", it's just a port (like ":8080")
+	// If it contains ":", it might be "host:port" format
+	// We want to use the full address as-is for binding
+	return HTTPServerParams{Port: address}
 }
 
 func ProvideHTTPModule() fx.Option {

@@ -91,37 +91,53 @@ func (aw *accrualWorker) processOrder(ctx context.Context, order *models.Order) 
 		return
 	}
 
-	// Если accrual client вернул nil (mock client), пропускаем обработку
-	if accrualInfo == nil {
-		return
-	}
+	// Map external accrual statuses to internal order statuses
+	internalStatus := aw.mapExternalStatus(accrualInfo.Status)
 
 	accrualEqual := (order.Accrual == nil && accrualInfo.Accrual == nil) ||
 		(order.Accrual != nil && accrualInfo.Accrual != nil && *order.Accrual == *accrualInfo.Accrual)
 
-	if accrualInfo.Status == order.Status && accrualEqual {
+	if internalStatus == order.Status && accrualEqual {
 		return
 	}
 
-	aw.logger.Info("Updating order", "order", order.Number, "old_status", order.Status, "new_status", accrualInfo.Status)
+	aw.logger.Info("Updating order", "order", order.Number, "old_status", order.Status, "new_status", internalStatus, "external_status", accrualInfo.Status)
 
 	var accrualValue float64
 	if accrualInfo.Accrual != nil {
 		accrualValue = *accrualInfo.Accrual
 	}
 
-	err = aw.orderService.UpdateOrderStatus(order.Number, accrualInfo.Status, accrualValue)
+	err = aw.orderService.UpdateOrderStatus(order.Number, internalStatus, accrualValue)
 	if err != nil {
 		aw.logger.Error("Failed to update order", "error", err, "order", order.Number)
 		return
 	}
 
-	if accrualInfo.Status == "PROCESSED" && accrualInfo.Accrual != nil && *accrualInfo.Accrual > 0 {
+	if internalStatus == models.OrderStatusProcessed && accrualInfo.Accrual != nil && *accrualInfo.Accrual > 0 {
 		err = aw.balanceService.AddBalance(order.UserID, *accrualInfo.Accrual)
 		if err != nil {
 			aw.logger.Error("Failed to add balance", "error", err, "user_id", order.UserID, "amount", *accrualInfo.Accrual)
 			return
 		}
 		aw.logger.Info("Balance added", "user_id", order.UserID, "amount", *accrualInfo.Accrual, "order", order.Number)
+	}
+}
+
+// mapExternalStatus maps external accrual system statuses to internal order statuses
+func (aw *accrualWorker) mapExternalStatus(externalStatus string) string {
+	switch externalStatus {
+	case accrual.StatusRegistered:
+		return models.OrderStatusNew
+	case accrual.StatusInvalid:
+		return models.OrderStatusInvalid
+	case accrual.StatusProcessing:
+		return models.OrderStatusProcessing
+	case accrual.StatusProcessed:
+		return models.OrderStatusProcessed
+	default:
+		// Log warning for unknown status and return as-is
+		aw.logger.Warn("Unknown external accrual status", "status", externalStatus)
+		return externalStatus
 	}
 }
