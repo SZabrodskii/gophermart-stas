@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
+
 	"github.com/SZabrodskii/gophermart-stas/internal/accrual"
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/SZabrodskii/gophermart-stas/internal/controllers"
 	"github.com/SZabrodskii/gophermart-stas/internal/database"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
 	"github.com/SZabrodskii/gophermart-stas/internal/services"
+	"github.com/SZabrodskii/gophermart-stas/internal/workers"
 	"github.com/SZabrodskii/gophermart-stas/pkg/logger"
 
 	"github.com/gopybara/httpbara"
@@ -27,12 +30,14 @@ func createApp() fx.Option {
 			config.New,
 			database.New,
 			accrual.ProvideClient,
+			workers.NewAccrualWorker,
 		),
 
 		provideControllers(),
 		server.ProvideHTTPModule("8080"),
 
-		fx.Invoke(func(engine httpbara.Engine) {
+		fx.Invoke(func(engine httpbara.Engine, worker workers.AccrualWorkerI) {
+			go worker.Start(context.Background())
 		}),
 	)
 }

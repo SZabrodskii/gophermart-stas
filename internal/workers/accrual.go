@@ -11,6 +11,11 @@ import (
 	"go.uber.org/fx"
 )
 
+type AccrualWorkerI interface {
+	Start(ctx context.Context) error
+	Stop()
+}
+
 type newAccrualWorkerIn struct {
 	fx.In
 
@@ -28,7 +33,7 @@ type accrualWorker struct {
 	stopCh         chan struct{}
 }
 
-func NewAccrualWorker(in newAccrualWorkerIn) *accrualWorker {
+func NewAccrualWorker(in newAccrualWorkerIn) AccrualWorkerI {
 	return &accrualWorker{
 		logger:         in.Logger,
 		orderService:   in.OrderService,
