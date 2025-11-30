@@ -7,13 +7,15 @@ import (
 
 	"github.com/SZabrodskii/gophermart-stas/internal/auth"
 	"github.com/SZabrodskii/gophermart-stas/internal/server"
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/gopybara/httpbara"
 	"go.uber.org/fx"
 )
 
 type middlewareControllerDescription struct {
-	JWTMiddleware httpbara.Middleware `middleware:"jwt"`
+	JWTMiddleware  httpbara.Middleware `middleware:"jwt"`
+	GzipMiddleware httpbara.Middleware `middleware:"gzip"`
 }
 
 type newMiddlewareControllerIn struct {
@@ -70,6 +72,10 @@ func (mc *middlewareController) JWTMiddleware(c *gin.Context) {
 	c.Request = c.Request.WithContext(ctx)
 
 	c.Next()
+}
+
+func (mc *middlewareController) GzipMiddleware(c *gin.Context) {
+	gzip.Gzip(gzip.DefaultCompression)(c)
 }
 
 func GetUserIDFromContext(ctx context.Context) (uint, bool) {

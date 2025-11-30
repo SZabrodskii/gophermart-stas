@@ -20,8 +20,8 @@ import (
 
 type orderControllerDescription struct {
 	OrdersAPI   httpbara.Group `group:"/api/user"`
-	UploadOrder httpbara.Route `route:"POST /orders" group:"ordersapi" middlewares:"jwt"`
-	GetOrders   httpbara.Route `route:"GET /orders" group:"ordersapi" middlewares:"jwt"`
+	UploadOrder httpbara.Route `route:"POST /orders" group:"ordersapi" middlewares:"gzip,jwt"`
+	GetOrders   httpbara.Route `route:"GET /orders" group:"ordersapi" middlewares:"gzip,jwt"`
 }
 
 type newOrderControllerIn struct {

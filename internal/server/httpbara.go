@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"strings"
 
+	"github.com/SZabrodskii/gophermart-stas/internal/config"
 	"github.com/gopybara/httpbara"
 	"go.uber.org/fx"
 )
@@ -61,12 +63,16 @@ func NewHTTPServer(in httpServerIn) (httpbara.Engine, error) {
 	return engine, nil
 }
 
-func ProvideHTTPModule(port string) fx.Option {
+func NewHTTPServerParams(cfg *config.Config) HTTPServerParams {
+	port := cfg.RunAddress
+	port = strings.TrimPrefix(port, ":")
+	return HTTPServerParams{Port: port}
+}
+
+func ProvideHTTPModule() fx.Option {
 	return fx.Options(
 		fx.Provide(
-			func() HTTPServerParams {
-				return HTTPServerParams{Port: port}
-			},
+			NewHTTPServerParams,
 			NewHTTPServer,
 		),
 	)

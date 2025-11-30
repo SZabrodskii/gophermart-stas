@@ -17,9 +17,9 @@ import (
 
 type balanceControllerDescription struct {
 	BalanceAPI  httpbara.Group `group:"/api/user"`
-	GetBalance  httpbara.Route `route:"GET /balance" group:"balanceapi" middlewares:"jwt"`
-	Withdraw    httpbara.Route `route:"POST /balance/withdraw" group:"balanceapi" middlewares:"jwt"`
-	Withdrawals httpbara.Route `route:"GET /withdrawals" group:"balanceapi" middlewares:"jwt"`
+	GetBalance  httpbara.Route `route:"GET /balance" group:"balanceapi" middlewares:"gzip,jwt"`
+	Withdraw    httpbara.Route `route:"POST /balance/withdraw" group:"balanceapi" middlewares:"gzip,jwt"`
+	Withdrawals httpbara.Route `route:"GET /withdrawals" group:"balanceapi" middlewares:"gzip,jwt"`
 }
 
 type newBalanceControllerIn struct {

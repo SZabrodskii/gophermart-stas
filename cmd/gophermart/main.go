@@ -34,7 +34,7 @@ func createApp() fx.Option {
 		),
 
 		provideControllers(),
-		server.ProvideHTTPModule("8080"),
+		server.ProvideHTTPModule(),
 
 		fx.Invoke(func(engine httpbara.Engine, worker workers.AccrualWorkerI) {
 			go worker.Start(context.Background())
