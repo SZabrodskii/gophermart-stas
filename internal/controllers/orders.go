@@ -42,15 +42,6 @@ type UploadOrderRequest struct {
 	OrderNumber string
 }
 
-type OrdersResponse []models.Order
-
-func (or *OrdersResponse) StatusCode() int {
-	if len(*or) == 0 {
-		return http.StatusNoContent
-	}
-	return http.StatusOK
-}
-
 type UploadOrderResponse struct {
 	Code int
 }
@@ -112,7 +103,7 @@ func (oc *orderController) UploadOrder(ctx *gin.Context, _ *UploadOrderRequest) 
 	return &UploadOrderResponse{Code: http.StatusAccepted}, nil
 }
 
-func (oc *orderController) GetOrders(ctx context.Context, _ *struct{}) (OrdersResponse, error) {
+func (oc *orderController) GetOrders(ctx context.Context, _ *struct{}) ([]models.Order, error) {
 	userID, ok := GetUserIDFromContext(ctx)
 	if !ok {
 		oc.logger.Warn("User not authenticated")
@@ -125,6 +116,12 @@ func (oc *orderController) GetOrders(ctx context.Context, _ *struct{}) (OrdersRe
 		return nil, casual.NewHTTPErrorFromMessage(500, "Failed to get orders")
 	}
 
+	// Если нет заказов, возвращаем 204 No Content через пустой слайс
+	if len(orders) == 0 {
+		oc.logger.Info("Orders retrieved successfully", "count", 0, "user_id", userID)
+		return nil, casual.NewHTTPErrorFromMessage(204, "")
+	}
+
 	oc.logger.Info("Orders retrieved successfully", "count", len(orders), "user_id", userID)
-	return OrdersResponse(orders), nil
+	return orders, nil
 }

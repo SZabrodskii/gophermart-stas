@@ -36,15 +36,6 @@ type balanceController struct {
 	balanceService domain.BalanceServiceI
 }
 
-type WithdrawalsResponse []models.Withdrawal
-
-func (wr *WithdrawalsResponse) StatusCode() int {
-	if len(*wr) == 0 {
-		return http.StatusNoContent
-	}
-	return http.StatusOK
-}
-
 type WithdrawResponse struct {
 	Code int
 }
@@ -108,7 +99,7 @@ func (bc *balanceController) Withdraw(ctx context.Context, req *models.Withdrawa
 	return &WithdrawResponse{Code: http.StatusOK}, nil
 }
 
-func (bc *balanceController) Withdrawals(ctx context.Context, _ *struct{}) (WithdrawalsResponse, error) {
+func (bc *balanceController) Withdrawals(ctx context.Context, _ *struct{}) ([]models.Withdrawal, error) {
 	userID, ok := GetUserIDFromContext(ctx)
 	if !ok {
 		bc.logger.Warn("User not authenticated")
@@ -121,6 +112,12 @@ func (bc *balanceController) Withdrawals(ctx context.Context, _ *struct{}) (With
 		return nil, casual.NewHTTPErrorFromMessage(500, "Failed to get withdrawals")
 	}
 
+	// Если нет списаний, возвращаем 204 No Content
+	if len(withdrawals) == 0 {
+		bc.logger.Info("Withdrawals retrieved successfully", "count", 0, "user_id", userID)
+		return nil, casual.NewHTTPErrorFromMessage(204, "")
+	}
+
 	bc.logger.Info("Withdrawals retrieved successfully", "count", len(withdrawals), "user_id", userID)
-	return WithdrawalsResponse(withdrawals), nil
+	return withdrawals, nil
 }
