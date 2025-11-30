@@ -1,81 +1,92 @@
 package database
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/SZabrodskii/gophermart-stas/internal/config"
+	"github.com/SZabrodskii/gophermart-stas/internal/models"
 
-	_ "github.com/lib/pq"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type DB struct {
-	conn *sql.DB
+	conn   *gorm.DB
+	logger *zap.Logger
 }
 
-func New(cfg *config.Config) (*DB, error) {
-	conn, err := sql.Open("postgres", cfg.DatabaseURI)
+func New(lc fx.Lifecycle, cfg *config.Config, logger *zap.Logger) (*DB, error) {
+	logger.Info("Connecting to database", zap.String("uri", maskPassword(cfg.DatabaseURI)))
+
+	conn, err := gorm.Open(postgres.Open(cfg.DatabaseURI), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	if err := conn.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
+	sqlDB, err := conn.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
 	}
 
-	db := &DB{conn: conn}
+	sqlDB.SetMaxOpenConns(10)
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetConnMaxLifetime(time.Minute * 30)
 
-	if err := db.migrate(); err != nil {
-		return nil, fmt.Errorf("failed to migrate database: %w", err)
+	db := &DB{
+		conn:   conn,
+		logger: logger,
 	}
+
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			if err := sqlDB.PingContext(ctx); err != nil {
+				return fmt.Errorf("failed to ping database: %w", err)
+			}
+
+			if err := db.migrate(); err != nil {
+				return fmt.Errorf("failed to migrate database: %w", err)
+			}
+
+			logger.Info("Database connected and migrated successfully")
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			logger.Info("Closing database connection")
+			return sqlDB.Close()
+		},
+	})
 
 	return db, nil
 }
 
+func maskPassword(uri string) string {
+	return "***masked***"
+}
+
 func (db *DB) migrate() error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS users (
-			id SERIAL PRIMARY KEY,
-			login VARCHAR(255) UNIQUE NOT NULL,
-			password VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP DEFAULT NOW()
-		)`,
-		`CREATE TABLE IF NOT EXISTS orders (
-			number VARCHAR(255) PRIMARY KEY,
-			user_id INTEGER REFERENCES users(id),
-			status VARCHAR(20) NOT NULL DEFAULT 'NEW',
-			accrual DECIMAL(10,2),
-			uploaded_at TIMESTAMP DEFAULT NOW()
-		)`,
-		`CREATE TABLE IF NOT EXISTS balances (
-			user_id INTEGER PRIMARY KEY REFERENCES users(id),
-			current DECIMAL(10,2) DEFAULT 0,
-			withdrawn DECIMAL(10,2) DEFAULT 0
-		)`,
-		`CREATE TABLE IF NOT EXISTS withdrawals (
-			id SERIAL PRIMARY KEY,
-			user_id INTEGER REFERENCES users(id),
-			order_number VARCHAR(255) NOT NULL,
-			sum DECIMAL(10,2) NOT NULL,
-			processed_at TIMESTAMP DEFAULT NOW()
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id)`,
+	db.logger.Info("Starting database migration")
+
+	err := db.conn.AutoMigrate(
+		&models.User{},
+		&models.Order{},
+		&models.Balance{},
+		&models.Withdrawal{},
+	)
+	if err != nil {
+		db.logger.Error("Migration failed", zap.Error(err))
+		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
-	for _, query := range queries {
-		if _, err := db.conn.Exec(query); err != nil {
-			return fmt.Errorf("failed to execute query %s: %w", query, err)
-		}
-	}
-
+	db.logger.Info("GORM AutoMigrate completed successfully")
 	return nil
 }
 
-func (db *DB) Close() error {
-	return db.conn.Close()
-}
-
-func (db *DB) GetDB() *sql.DB {
+func (db *DB) GetDB() *gorm.DB {
 	return db.conn
 }
